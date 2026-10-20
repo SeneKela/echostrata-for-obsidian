@@ -1,0 +1,9 @@
+{
+	"id": "note-recorder-transcriber",
+	"name": "Note Recorder & Transcriber",
+	"version": "1.4.0",
+	"minAppVersion": "1.5.0",
+	"description": "Record microphone + Mac system audio right inside a note, then transcribe (whisper.cpp) and summarise (Ollama) locally.",
+	"author": "Martin Burkel",
+	"isDesktopOnly": true
+}

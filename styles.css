@@ -1,0 +1,344 @@
+/* ============ Note Recorder & Transcriber — Figma-style UI (v1.4.1) ============ */
+
+body {
+	--nrt-font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+	--nrt-blue: #0d99ff;
+	--nrt-blue-hover: #007be5;
+	--nrt-red: #f24822;
+	--nrt-red-hover: #dc3412;
+	--nrt-orange: #ffa629;
+	--nrt-green: #14ae5c;
+	--nrt-grey-btn: #6f6f6f;
+	--nrt-grey-btn-hover: #7d7d7d;
+	--nrt-grey-btn-active: #5f5f5f;
+	/* Floating toolbar: always dark, like Figma's canvas toolbar */
+	--nrt-tb-bg: #2c2c2c;
+	--nrt-tb-border: #444444;
+	--nrt-tb-text: #ffffff;
+	--nrt-tb-muted: rgba(255, 255, 255, 0.55);
+	--nrt-tb-divider: rgba(255, 255, 255, 0.1);
+	--nrt-tb-track: rgba(255, 255, 255, 0.12);
+	/* Panels (settings, setup) follow the theme */
+	--nrt-panel: #ffffff;
+	--nrt-panel-2: #f5f5f5;
+	--nrt-line: #e6e6e6;
+	--nrt-text: #1e1e1e;
+	--nrt-muted: #757575;
+	--nrt-faint: #b3b3b3;
+}
+body.theme-dark {
+	--nrt-panel: #2c2c2c;
+	--nrt-panel-2: #383838;
+	--nrt-line: #444444;
+	--nrt-text: #ffffff;
+	--nrt-muted: #a8a8a8;
+	--nrt-faint: #6e6e6e;
+}
+
+@keyframes nrt-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+@keyframes nrt-spin { to { transform: rotate(360deg); } }
+@keyframes nrt-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(250%); } }
+@keyframes nrt-rise { from { opacity: 0; transform: translate(-50%, 6px) scale(0.98); } to { opacity: 1; transform: translate(-50%, 0) scale(1); } }
+
+/* ---------- header action (note title bar) ---------- */
+.view-action.nrt-action { border-radius: 6px; }
+.view-action.nrt-action .nrt-action-icon { display: inline-flex; align-items: center; justify-content: center; }
+.view-action.nrt-action .nrt-action-time:empty,
+.view-action.nrt-action:not(.nrt-recording):not(.nrt-paused):not(.nrt-busy) .nrt-action-time { display: none; }
+.view-action.nrt-action.nrt-recording,
+.view-action.nrt-action.nrt-paused,
+.view-action.nrt-action.nrt-busy {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	width: auto;
+	height: 24px;
+	padding: 0 8px;
+	border-radius: 6px;
+	font-family: var(--nrt-font);
+	font-size: 11px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+}
+.view-action.nrt-action.nrt-recording { color: #fff; background: var(--nrt-red); }
+.view-action.nrt-action.nrt-recording:hover { background: var(--nrt-red-hover); }
+.view-action.nrt-action.nrt-paused { color: var(--nrt-text); background: var(--nrt-panel-2); box-shadow: inset 0 0 0 1px var(--nrt-line); }
+.view-action.nrt-action.nrt-busy { color: var(--nrt-muted); background: var(--nrt-panel-2); }
+.view-action.nrt-action.nrt-busy .nrt-action-icon { animation: nrt-spin 1s linear infinite; }
+.nrt-action.nrt-recording .nrt-action-icon svg,
+.nrt-action.nrt-paused .nrt-action-icon svg,
+.nrt-action.nrt-busy .nrt-action-icon svg { width: 10px; height: 10px; stroke-width: 2.5; }
+.nrt-action.nrt-recording .nrt-action-icon svg { fill: currentColor; }
+
+/* ---------- ribbon + status bar ---------- */
+.side-dock-ribbon-action.nrt-ribbon.nrt-recording { color: var(--nrt-red); }
+.side-dock-ribbon-action.nrt-ribbon.nrt-recording svg { fill: currentColor; }
+.nrt-status { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-family: var(--nrt-font); font-size: 11px; font-variant-numeric: tabular-nums; }
+.nrt-status.nrt-status-rec { color: var(--nrt-red); font-weight: 500; }
+
+.nrt-dot {
+	width: 6px; height: 6px; border-radius: 50%;
+	background: var(--nrt-red);
+	animation: nrt-pulse 1.4s ease-in-out infinite;
+	flex: none;
+}
+
+/* ---------- floating toolbar (in-note) ---------- */
+.nrt-host { position: relative; }
+
+.nrt-bar {
+	position: absolute;
+	left: 50%;
+	/* Sits above Obsidian's floating status bar instead of under it */
+	bottom: 52px;
+	transform: translateX(-50%);
+	z-index: 30;
+	display: flex;
+	align-items: center;
+	gap: 0;
+	height: 48px;
+	max-width: calc(100% - 32px);
+	padding: 0 8px;
+	border-radius: 13px;
+	background: var(--nrt-tb-bg);
+	border: 0.5px solid var(--nrt-tb-border);
+	box-shadow:
+		0 0 0.5px rgba(0, 0, 0, 0.3),
+		0 2px 4px rgba(0, 0, 0, 0.12),
+		0 10px 24px rgba(0, 0, 0, 0.22);
+	font-family: var(--nrt-font);
+	font-size: 11px;
+	line-height: 16px;
+	color: var(--nrt-tb-text);
+	animation: nrt-rise 0.16s cubic-bezier(0.2, 0, 0, 1);
+	user-select: none;
+	-webkit-font-smoothing: antialiased;
+}
+.nrt-bar > * { flex: none; }
+.nrt-bar > .nrt-wave,
+.nrt-bar > .nrt-meters,
+.nrt-bar > .nrt-buttons {
+	margin-left: 8px;
+	padding-left: 8px;
+	border-left: 1px solid var(--nrt-tb-divider);
+	height: 32px;
+}
+.nrt-bar[data-state="done"],
+.nrt-bar[data-state="error"],
+.nrt-bar[data-state="starting"], .nrt-bar[data-state="stopping"],
+.nrt-bar[data-state="saving"], .nrt-bar[data-state="transcribing"], .nrt-bar[data-state="summarizing"] {
+	gap: 10px; padding: 0 16px; height: 40px; border-radius: 10px;
+}
+.nrt-bar[data-state="done"] .nrt-result-icon { color: var(--nrt-green); }
+.nrt-bar[data-state="error"] .nrt-result-icon { color: var(--nrt-red); }
+
+.nrt-rec { display: flex; align-items: center; gap: 8px; padding: 0 6px 0 4px; }
+.nrt-rec-label { font-size: 11px; font-weight: 600; color: var(--nrt-red); letter-spacing: 0.04em; text-transform: uppercase; }
+.nrt-bar[data-state="paused"] .nrt-rec-label { color: var(--nrt-orange); }
+.nrt-bar[data-state="paused"] .nrt-dot { background: var(--nrt-orange); animation: none; }
+.nrt-time { font-variant-numeric: tabular-nums; font-weight: 500; min-width: 38px; color: var(--nrt-tb-text); }
+
+.nrt-wave { width: 140px; display: block; box-sizing: content-box; }
+
+.nrt-meters { display: flex; flex-direction: column; justify-content: center; gap: 6px; min-width: 76px; }
+.nrt-meter { display: flex; align-items: center; gap: 6px; color: var(--nrt-tb-muted); height: 12px; }
+.nrt-meter-off { color: rgba(255, 255, 255, 0.3); }
+.nrt-meter svg, .nrt-meter-icon svg { width: 12px; height: 12px; stroke-width: 2; }
+.nrt-meter-icon { display: inline-flex; }
+.nrt-meter .nrt-track { width: 54px; height: 3px; background: var(--nrt-tb-track); }
+.nrt-meter .nrt-fill { transition: width 0.06s linear; background: var(--nrt-blue); }
+
+.nrt-track { position: relative; overflow: hidden; height: 4px; border-radius: 2px; background: var(--nrt-line); }
+.nrt-bar .nrt-track { background: var(--nrt-tb-track); }
+.nrt-fill { height: 100%; width: 0; border-radius: inherit; background: var(--nrt-blue); transition: width 0.25s ease; }
+.nrt-track.nrt-indeterminate .nrt-fill { width: 40% !important; animation: nrt-slide 1.1s ease-in-out infinite; }
+
+/* Toolbar buttons — selector is more specific than Obsidian's `button:not(.clickable-icon)`
+   so the theme's light grey button background no longer leaks in. */
+.nrt-buttons { display: flex; align-items: center; gap: 4px; }
+.nrt-bar button.nrt-btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	height: 32px; min-width: 32px; padding: 0 8px;
+	border: none; border-radius: 5px; box-shadow: none; outline: none;
+	color: #ffffff;
+	font-family: var(--nrt-font); font-weight: 500; font-size: 11px;
+	cursor: default;
+	transition: background-color 0.08s ease;
+}
+.nrt-bar button.nrt-btn:focus-visible { box-shadow: 0 0 0 2px var(--nrt-blue); }
+.nrt-bar .nrt-btn-icon { display: inline-flex; color: #ffffff; }
+.nrt-bar .nrt-btn-icon svg { width: 16px; height: 16px; stroke: #ffffff; stroke-width: 1.75; }
+
+/* Pause / Resume + Close: #6F6F6F with white icon */
+.nrt-bar button.nrt-btn:not(.nrt-stop) { background-color: var(--nrt-grey-btn); }
+.nrt-bar button.nrt-btn:not(.nrt-stop):hover { background-color: var(--nrt-grey-btn-hover); }
+.nrt-bar button.nrt-btn:not(.nrt-stop):active { background-color: var(--nrt-grey-btn-active); }
+
+/* Stop: red */
+.nrt-bar button.nrt-btn.nrt-stop { background-color: var(--nrt-red); padding: 0 12px; }
+.nrt-bar button.nrt-btn.nrt-stop:hover { background-color: var(--nrt-red-hover); }
+.nrt-bar button.nrt-btn.nrt-stop .nrt-btn-icon svg { fill: #ffffff; width: 10px; height: 10px; }
+
+.nrt-progress { display: flex; flex-direction: column; gap: 6px; min-width: 200px; }
+.nrt-progress .nrt-label { font-variant-numeric: tabular-nums; }
+.nrt-label { font-weight: 500; }
+.nrt-result-icon { display: inline-flex; }
+.nrt-result-icon svg { width: 16px; height: 16px; }
+
+.nrt-spinner {
+	width: 12px; height: 12px; flex: none; border-radius: 50%;
+	border: 1.5px solid rgba(127, 127, 127, 0.3);
+	border-top-color: var(--nrt-blue);
+	animation: nrt-spin 0.7s linear infinite;
+	display: inline-block;
+}
+
+@media (max-width: 640px) {
+	.nrt-bar > .nrt-wave, .nrt-bar > .nrt-meters { display: none; }
+}
+
+/* ---------- settings ----------
+   Only padding and typography are adjusted. Borders, card backgrounds, toggles and
+   sliders are left entirely to Obsidian / your theme, so nothing overlaps. */
+.nrt-settings {
+	font-family: var(--nrt-font);
+	-webkit-font-smoothing: antialiased;
+	/* Native toggles & sliders keep their shape; only their accent colour is set to Figma blue. */
+	--interactive-accent: var(--nrt-blue);
+	--interactive-accent-hover: var(--nrt-blue-hover);
+	--interactive-accent-hsl: 205, 100%, 53%;
+	--color-accent: var(--nrt-blue);
+	--color-accent-hsl: 205, 100%, 53%;
+	--checkbox-color: var(--nrt-blue);
+	--checkbox-color-hover: var(--nrt-blue-hover);
+	--toggle-thumb-color: #ffffff;
+	accent-color: var(--nrt-blue);
+}
+.nrt-settings .checkbox-container.is-enabled { background-color: var(--nrt-blue); }
+.nrt-settings input[type="range"] { accent-color: var(--nrt-blue); }
+/* Each setting = white card, 1px light-grey border, 8px radius, separated by a gap (no shared borders → no overlap). */
+.nrt-settings .setting-item:not(.setting-item-heading) {
+	background: var(--nrt-panel);
+	border: 1px solid var(--nrt-line);
+	border-radius: 8px;
+	box-shadow: none;
+	padding: 14px 16px;
+	margin: 0 0 8px;
+}
+.nrt-settings .setting-item:not(.setting-item-heading) + .setting-item:not(.setting-item-heading) { border-top: 1px solid var(--nrt-line); }
+.nrt-settings .setting-item-heading {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 24px 4px 8px;
+	margin: 0;
+}
+.nrt-settings .setting-item-heading .setting-item-name { font-size: 12px; font-weight: 600; color: var(--nrt-text); }
+.nrt-settings .setting-item-name { font-size: 13px; font-weight: 500; color: var(--nrt-text); }
+.nrt-settings .setting-item-description { font-size: 12px; line-height: 17px; color: var(--nrt-muted); padding-top: 3px; }
+.nrt-settings .setting-item-info { padding-right: 16px; }
+.nrt-settings .setting-item-control { gap: 8px; }
+
+/* Dropdowns & text fields: white, light-grey border, blue focus — Figma inputs */
+.nrt-settings select.dropdown,
+.nrt-settings input[type="text"],
+.nrt-setup select.dropdown {
+	height: 32px;
+	border-radius: 5px;
+	font-family: var(--nrt-font);
+	font-size: 12px;
+	color: var(--nrt-text);
+	background-color: var(--nrt-panel);
+	border: 1px solid var(--nrt-line);
+	box-shadow: none;
+}
+.nrt-settings select.dropdown:hover,
+.nrt-settings input[type="text"]:hover,
+.nrt-setup select.dropdown:hover { border-color: var(--nrt-faint); }
+.nrt-settings select.dropdown:focus,
+.nrt-settings input[type="text"]:focus,
+.nrt-setup select.dropdown:focus { border-color: var(--nrt-blue); box-shadow: 0 0 0 1px var(--nrt-blue); outline: none; }
+
+/* Buttons & dropdowns — Figma flavour (higher specificity than the theme's button rule) */
+.nrt-settings .setting-item-control button:not(.clickable-icon),
+.nrt-setup .modal-content button:not(.clickable-icon) {
+	height: 32px;
+	padding: 0 12px;
+	border-radius: 5px;
+	font-family: var(--nrt-font);
+	font-size: 12px;
+	font-weight: 500;
+	box-shadow: none;
+	outline: none;
+	background-color: transparent;
+	color: var(--nrt-text);
+	border: 1px solid var(--nrt-line);
+	cursor: default;
+}
+.nrt-settings .setting-item-control button:not(.clickable-icon):hover,
+.nrt-setup .modal-content button:not(.clickable-icon):hover { background-color: var(--nrt-panel-2); }
+.nrt-settings .setting-item-control button.mod-cta,
+.nrt-setup .modal-content button.mod-cta { background-color: var(--nrt-blue); border-color: var(--nrt-blue); color: #fff; }
+.nrt-settings .setting-item-control button.mod-cta:hover,
+.nrt-setup .modal-content button.mod-cta:hover { background-color: var(--nrt-blue-hover); border-color: var(--nrt-blue-hover); }
+.nrt-settings .setting-item-control button:focus-visible,
+.nrt-setup .modal-content button:focus-visible { box-shadow: 0 0 0 2px var(--nrt-blue); }
+.nrt-settings .setting-item-control button:disabled { opacity: 0.4; }
+
+/* ---------- setup modal ---------- */
+.modal.nrt-setup {
+	width: min(580px, 92vw);
+	padding: 0;
+	border-radius: 13px;
+	background: var(--nrt-panel);
+	border: 0.5px solid var(--nrt-line);
+	box-shadow: 0 2px 5px rgba(0,0,0,0.15), 0 10px 16px rgba(0,0,0,0.12), 0 0 0.5px rgba(0,0,0,0.15);
+	overflow: hidden;
+	font-family: var(--nrt-font);
+}
+.nrt-setup .modal-title {
+	margin: 0;
+	padding: 14px 16px;
+	font-size: 13px; font-weight: 600;
+	color: var(--nrt-text);
+	border-bottom: 1px solid var(--nrt-line);
+}
+.nrt-setup .modal-close-button { top: 10px; right: 10px; border-radius: 5px; }
+.nrt-setup .modal-content { padding: 12px 16px 16px; }
+.nrt-setup-intro { color: var(--nrt-muted); font-size: 11px; margin: 0 0 12px; }
+.nrt-setup-list { display: flex; flex-direction: column; border: 1px solid var(--nrt-line); border-radius: 8px; overflow: hidden; }
+.nrt-setup-row {
+	display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 12px; align-items: start;
+	padding: 14px 16px;
+	background: var(--nrt-panel);
+}
+.nrt-setup-row + .nrt-setup-row { border-top: 1px solid var(--nrt-line); }
+.nrt-setup-icon { display: flex; padding-top: 1px; }
+.nrt-setup-icon svg { width: 16px; height: 16px; }
+.nrt-setup-row.is-ok .nrt-setup-icon { color: var(--nrt-green); }
+.nrt-setup-row.is-missing .nrt-setup-icon { color: var(--nrt-orange); }
+.nrt-setup-row.is-optional .nrt-setup-icon { color: var(--nrt-faint); }
+.nrt-setup-title { font-size: 12px; font-weight: 500; color: var(--nrt-text); }
+.nrt-setup-desc { color: var(--nrt-muted); font-size: 11px; line-height: 16px; margin-top: 2px; word-break: break-word; }
+.nrt-setup-picker { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.nrt-setup-picker-label { font-size: 11px; color: var(--nrt-muted); flex: none; }
+.nrt-setup-picker select.dropdown { flex: 1; min-width: 0; max-width: 100%; }
+.nrt-setup-row .nrt-track { margin-top: 8px; }
+.nrt-setup-log {
+	font-family: "SF Mono", var(--font-monospace); font-size: 10px; color: var(--nrt-muted);
+	margin-top: 6px; padding: 4px 6px; border-radius: 4px; background: var(--nrt-panel-2);
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px;
+}
+.nrt-setup-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; max-width: 170px; }
+/* Long labels (e.g. "Download qwen3:4b (~2.6 GB)") wrap onto a second line instead of being cropped */
+.nrt-setup .modal-content .nrt-setup-actions button {
+	height: auto;
+	min-height: 32px;
+	padding: 6px 12px;
+	white-space: normal;
+	line-height: 16px;
+	text-align: center;
+	word-break: normal;
+	overflow-wrap: anywhere;
+}
+.nrt-setup-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
