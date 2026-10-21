@@ -7,7 +7,7 @@
 <p align="center">
   <strong>Record. Transcribe. Locally.</strong><br>
   Record your microphone and your Mac's system audio directly within the note you're writing.<br>
-  Get a transcript with speaker labels, a summary and action items. Nothing leaves your Mac.
+  Get a transcript, a summary and action items. Nothing leaves your Mac.
 </p>
 
 <p align="center">
