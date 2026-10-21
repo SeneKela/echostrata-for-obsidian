@@ -4,7 +4,7 @@ import type NoteRecorderPlugin from "./main";
 import { AudioRecorder, RecorderResult, SystemSource } from "./recorder";
 import { defaultInputIsLoopback, resolveSystemDevice } from "./devices";
 import { buildHelper, canBuildHelper, helperBuilt, helperPath, NativeAudioError, nativeSupported, openScreenRecordingSettings } from "./native-audio";
-import { callout, insertBlock, removeBlock, updateBlock } from "./note";
+import { callout, insertBlock, removeBlock, updateBlock, wrapSummary } from "./note";
 import { findWhisper, makeWorkDir, removeDir } from "./system";
 import { formatClock, modelPathFor, Paragraph, Segment, toParagraphs, transcribeWav } from "./transcriber";
 import { summarize } from "./summarizer";
@@ -15,7 +15,7 @@ export type JobPhase = "saving" | "transcribing" | "summarizing" | "done" | "err
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-function isoDate(d: Date): string {
+export function isoDate(d: Date): string {
 	const p = (n: number) => String(n).padStart(2, "0");
 	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
@@ -284,7 +284,7 @@ export class ProcessingJob {
 	private render(paragraphs: Paragraph[], summary: RenderedSummary | null): string {
 		const s = this.plugin.settings;
 		const parts: string[] = [this.embed];
-		if (summary) parts.push(...summary.blocks);
+		if (summary) parts.push(wrapSummary(summary.blocks));
 		const speakers = [...new Set(paragraphs.map((p) => p.speaker).filter(Boolean))];
 		const title = `Transcript · ${formatClock(this.rec.durationMs)}${speakers.length ? " · " + speakers.join(" / ") : ""}`;
 		const body = paragraphs.length

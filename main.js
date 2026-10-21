@@ -33,7 +33,7 @@ __export(main_exports, {
   default: () => NoteRecorderPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var path5 = __toESM(require("path"));
 
 // src/settings.ts
@@ -368,6 +368,39 @@ async function removeBlock(app, file, id) {
 
 ${after}` : (before || after).replace(/\n*$/, "\n");
   });
+}
+var SUMMARY_OPEN = "%%nrt-summary%%";
+var SUMMARY_CLOSE = "%%/nrt-summary%%";
+var TRANSCRIPT_HEAD = /^> \[!quote\][-+]? Transcript\b(.*)$/;
+function wrapSummary(blocks) {
+  return `${SUMMARY_OPEN}
+${blocks.join("\n\n")}
+
+${SUMMARY_CLOSE}`;
+}
+function parseTranscript(md) {
+  var _a;
+  const lines = md.split("\n");
+  const start = lines.findIndex((l) => TRANSCRIPT_HEAD.test(l));
+  if (start < 0) return null;
+  let end = start + 1;
+  while (end < lines.length && lines[end].startsWith(">")) end++;
+  const [, duration = "", speakers = ""] = ((_a = TRANSCRIPT_HEAD.exec(lines[start])[1]) != null ? _a : "").split("\xB7").map((s) => s.trim());
+  const text = lines.slice(start + 1, end).map((l) => l.replace(/^>\s?/, "").trim()).filter(Boolean).map((l) => l.replace(/^`[^`]*`\s*/, "").replace(/^\*\*(.+?):\*\*\s*/, "$1: ")).join("\n");
+  if (!text || text === "*No speech detected.*") return null;
+  return { text, duration, speakers: speakers.replace(/\s*\/\s*/g, ", "), start, end };
+}
+function replaceSummary(md, blocks) {
+  const wrapped = wrapSummary(blocks);
+  const s = md.indexOf(SUMMARY_OPEN);
+  const e = md.indexOf(SUMMARY_CLOSE);
+  if (s >= 0 && e > s) return md.slice(0, s) + wrapped + md.slice(e + SUMMARY_CLOSE.length);
+  const tr = parseTranscript(md);
+  if (!tr) return md;
+  const lines = md.split("\n");
+  let from = tr.start;
+  while (from > 0 && (lines[from - 1].trim() === "" || lines[from - 1].startsWith(">"))) from--;
+  return [...lines.slice(0, from), ...from > 0 ? [""] : [], wrapped, "", ...lines.slice(tr.start)].join("\n");
 }
 
 // src/templates.ts
@@ -829,10 +862,10 @@ ${RETRY_NOTE}`, user);
 // src/template-modal.ts
 var import_obsidian2 = require("obsidian");
 var TemplateModal = class extends import_obsidian2.FuzzySuggestModal {
-  constructor(app, onPick) {
+  constructor(app, onPick, placeholder = "Choose a summary template for this recording\u2026") {
     super(app);
     this.onPick = onPick;
-    this.setPlaceholder("Choose a summary template for this recording\u2026");
+    this.setPlaceholder(placeholder);
   }
   getItems() {
     return allTemplates();
@@ -1422,7 +1455,7 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
     }));
     customHeader.settingEl.addClass("nrt-tpl-header");
     for (const def of s.customTemplates) {
-      new import_obsidian3.Setting(containerEl).setName(def.name).setDesc(def.useFor || "Custom template").addExtraButton((b) => b.setIcon("pencil").setTooltip("Edit").onClick(() => {
+      new import_obsidian3.Setting(containerEl).setName(def.name).setDesc(def.useFor || "Custom template").addButton((b) => b.setButtonText("Edit").onClick(() => {
         new TemplateEditModal(this.app, def, [], async (updated) => {
           Object.assign(def, updated, { id: def.id });
           await this.saveTemplates();
@@ -2187,7 +2220,7 @@ ${callout("info", "\u23F3 Transcribing\u2026")}`);
   render(paragraphs, summary) {
     const s = this.plugin.settings;
     const parts = [this.embed];
-    if (summary) parts.push(...summary.blocks);
+    if (summary) parts.push(wrapSummary(summary.blocks));
     const speakers = [...new Set(paragraphs.map((p) => p.speaker).filter(Boolean))];
     const title = `Transcript \xB7 ${formatClock(this.rec.durationMs)}${speakers.length ? " \xB7 " + speakers.join(" / ") : ""}`;
     const body = paragraphs.length ? paragraphs.flatMap((p, i) => {
@@ -2804,8 +2837,112 @@ var SetupModal = class extends import_obsidian6.Modal {
   }
 };
 
+// src/resummarize.ts
+var import_obsidian7 = require("obsidian");
+var NO_TRANSCRIPT = "No Echostrata transcript found here.";
+var isMarkdownFile = (f) => f instanceof import_obsidian7.TFile && f.extension === "md";
+async function buildSummary(plugin, md, title, date, template) {
+  const tr = parseTranscript(md);
+  if (!tr) throw new Error(NO_TRANSCRIPT);
+  const s = plugin.settings;
+  const data = await summarize(
+    s.ollamaUrl,
+    s.ollamaModel,
+    template,
+    { noteTitle: title, date, duration: tr.duration, speakers: tr.speakers || s.micSpeakerName },
+    tr.text
+  );
+  return template.render(data).blocks;
+}
+async function run2(task, template) {
+  const notice = new import_obsidian7.Notice(`Applying \u201C${template.name}\u201D\u2026`, 0);
+  try {
+    await task();
+    new import_obsidian7.Notice(`Summary updated with \u201C${template.name}\u201D.`);
+  } catch (e) {
+    console.error("[note-recorder]", e);
+    new import_obsidian7.Notice(`Note Recorder: ${e.message}`, 8e3);
+  } finally {
+    notice.hide();
+  }
+}
+function applyTemplateToFile(plugin, file, template) {
+  return run2(async () => {
+    const md = await plugin.app.vault.read(file);
+    const blocks = await buildSummary(plugin, md, file.basename, isoDate(new Date(file.stat.ctime)), template);
+    await plugin.app.vault.process(file, (data) => replaceSummary(data, blocks));
+    await plugin.app.fileManager.processFrontMatter(file, (fm) => {
+      fm["echostrata-template"] = template.id;
+    });
+  }, template);
+}
+function applyTemplateToTextNode(plugin, node, template) {
+  return run2(async () => {
+    var _a, _b, _c;
+    const md = String((_a = node.text) != null ? _a : "");
+    const blocks = await buildSummary(plugin, md, "Canvas card", isoDate(/* @__PURE__ */ new Date()), template);
+    const latest = typeof node.text === "string" ? node.text : md;
+    node.setText(replaceSummary(latest, blocks));
+    (_c = (_b = node.canvas) == null ? void 0 : _b.requestSave) == null ? void 0 : _c.call(_b);
+  }, template);
+}
+var pointer = null;
+function pickTemplate(plugin, apply, atPointer = false) {
+  if (atPointer && pointer) {
+    const menu = new import_obsidian7.Menu();
+    menu.addItem((i) => i.setTitle("Apply summary template").setIsLabel(true));
+    for (const t of allTemplates()) menu.addItem((i) => i.setTitle(t.name).onClick(() => apply(t)));
+    menu.showAtPosition(pointer);
+    return;
+  }
+  new TemplateModal(plugin.app, apply, "Apply a summary template to this transcript\u2026").open();
+}
+function registerResummarize(plugin) {
+  const { app } = plugin;
+  const title = "Change summary template\u2026";
+  const track = (e) => {
+    pointer = { x: e.clientX, y: e.clientY };
+  };
+  plugin.registerDomEvent(document, "mousedown", track, true);
+  plugin.registerDomEvent(document, "contextmenu", track, true);
+  plugin.addCommand({
+    id: "change-summary-template",
+    name: "Change summary template of this transcript\u2026",
+    checkCallback: (checking) => {
+      const view = app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+      if (!(view == null ? void 0 : view.file) || !parseTranscript(view.editor.getValue())) return false;
+      const file = view.file;
+      if (!checking) pickTemplate(plugin, (t) => void applyTemplateToFile(plugin, file, t));
+      return true;
+    }
+  });
+  plugin.registerEvent(
+    app.workspace.on("editor-menu", (menu, editor, info) => {
+      const file = info.file;
+      if (!isMarkdownFile(file) || !parseTranscript(editor.getValue())) return;
+      menu.addItem((i) => i.setTitle(title).setIcon("sparkles").onClick(() => pickTemplate(plugin, (t) => void applyTemplateToFile(plugin, file, t), true)));
+    })
+  );
+  plugin.registerEvent(
+    app.workspace.on("file-menu", (menu, file, source) => {
+      if (source !== "more-options" || !isMarkdownFile(file)) return;
+      menu.addItem((i) => i.setTitle(title).setIcon("sparkles").onClick(() => pickTemplate(plugin, (t) => void applyTemplateToFile(plugin, file, t), true)));
+    })
+  );
+  plugin.registerEvent(
+    app.workspace.on("canvas:node-menu", (menu, node) => {
+      if (isMarkdownFile(node.file)) {
+        const file = node.file;
+        menu.addItem((i) => i.setTitle(title).setIcon("sparkles").onClick(() => pickTemplate(plugin, (t) => void applyTemplateToFile(plugin, file, t), true)));
+      } else if (typeof node.text === "string" && typeof node.setText === "function" && parseTranscript(node.text)) {
+        menu.addItem((i) => i.setTitle(title).setIcon("sparkles").onClick(() => pickTemplate(plugin, (t) => void applyTemplateToTextNode(plugin, node, t), true)));
+      }
+    })
+  );
+}
+
 // src/main.ts
-var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
+var NoteRecorderPlugin = class extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.session = null;
@@ -2816,7 +2953,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
   get pluginDir() {
     var _a;
     const adapter = this.app.vault.adapter;
-    if (!(adapter instanceof import_obsidian7.FileSystemAdapter)) throw new Error("Desktop vault required");
+    if (!(adapter instanceof import_obsidian8.FileSystemAdapter)) throw new Error("Desktop vault required");
     return path5.join(adapter.getBasePath(), (_a = this.manifest.dir) != null ? _a : `${this.app.vault.configDir}/plugins/${this.manifest.id}`);
   }
   get modelsDir() {
@@ -2834,7 +2971,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
       name: "Record with template\u2026",
       checkCallback: (checking) => {
         var _a;
-        if (this.session || !((_a = this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView)) == null ? void 0 : _a.file)) return false;
+        if (this.session || !((_a = this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView)) == null ? void 0 : _a.file)) return false;
         if (!checking) new TemplateModal(this.app, (t) => void this.startRecording(void 0, t.id)).open();
         return true;
       }
@@ -2858,6 +2995,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
       }
     });
     this.addCommand({ id: "open-setup", name: "Open setup assistant", callback: () => this.openSetup() });
+    registerResummarize(this);
     const refresh = () => this.ui.refresh();
     this.registerEvent(this.app.workspace.on("layout-change", refresh));
     this.registerEvent(this.app.workspace.on("active-leaf-change", refresh));
@@ -2889,9 +3027,9 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
   }
   async startRecording(view, templateId) {
     var _a;
-    const target = view != null ? view : this.app.workspace.getActiveViewOfType(import_obsidian7.MarkdownView);
+    const target = view != null ? view : this.app.workspace.getActiveViewOfType(import_obsidian8.MarkdownView);
     if (!(target == null ? void 0 : target.file)) {
-      new import_obsidian7.Notice("Open a note first \u2014 the recording is added to it.");
+      new import_obsidian8.Notice("Open a note first \u2014 the recording is added to it.");
       return;
     }
     const session = new RecordingSession(this, target.file, target, templateId);
@@ -2904,7 +3042,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
       this.session = null;
       const err = e;
       const msg = (err == null ? void 0 : err.name) === "NotAllowedError" ? "Microphone access denied. Allow Obsidian in System Settings \u2192 Privacy & Security \u2192 Microphone." : `Could not start recording: ${(_a = err == null ? void 0 : err.message) != null ? _a : e}`;
-      new import_obsidian7.Notice(msg, 8e3);
+      new import_obsidian8.Notice(msg, 8e3);
     }
     this.ui.refresh();
   }
@@ -2928,7 +3066,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
       void job.run();
     } catch (e) {
       this.session = null;
-      new import_obsidian7.Notice(`Recording failed: ${e.message}`, 8e3);
+      new import_obsidian8.Notice(`Recording failed: ${e.message}`, 8e3);
       this.ui.refresh();
       this.updateKeepAwake();
     }
@@ -2938,7 +3076,7 @@ var NoteRecorderPlugin = class extends import_obsidian7.Plugin {
     if (!s) return;
     await s.cancel();
     this.session = null;
-    new import_obsidian7.Notice("Recording discarded.");
+    new import_obsidian8.Notice("Recording discarded.");
     this.ui.refresh();
     this.updateKeepAwake();
   }

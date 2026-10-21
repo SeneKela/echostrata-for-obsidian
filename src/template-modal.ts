@@ -3,9 +3,13 @@ import { allTemplates, CustomTemplateDef, newCustomId, SummaryTemplate } from ".
 
 /** "Record with template…" picker. */
 export class TemplateModal extends FuzzySuggestModal<SummaryTemplate> {
-	constructor(app: App, private readonly onPick: (template: SummaryTemplate) => void) {
+	constructor(
+		app: App,
+		private readonly onPick: (template: SummaryTemplate) => void,
+		placeholder = "Choose a summary template for this recording…",
+	) {
 		super(app);
-		this.setPlaceholder("Choose a summary template for this recording…");
+		this.setPlaceholder(placeholder);
 	}
 
 	getItems(): SummaryTemplate[] {

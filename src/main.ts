@@ -7,6 +7,7 @@ import { NoteUI } from "./ui";
 import { SetupModal } from "./setup";
 import { TemplateModal } from "./template-modal";
 import { setCustomTemplates } from "./templates";
+import { registerResummarize } from "./resummarize";
 import { startCaffeinate } from "./system";
 
 export default class NoteRecorderPlugin extends Plugin {
@@ -64,6 +65,7 @@ export default class NoteRecorderPlugin extends Plugin {
 			},
 		});
 		this.addCommand({ id: "open-setup", name: "Open setup assistant", callback: () => this.openSetup() });
+		registerResummarize(this);
 
 		const refresh = () => this.ui.refresh();
 		this.registerEvent(this.app.workspace.on("layout-change", refresh));
