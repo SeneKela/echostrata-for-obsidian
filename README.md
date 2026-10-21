@@ -27,11 +27,11 @@
 
 Meeting tools upload your conversations to someone else's servers. Echostrata doesn't.
 
-- 🎙 **Mic + system audio.** Captures your voice *and* what your Mac plays: Zoom, Teams, Meet, a browser tab, a video.
-- 📝 **Directly within Obsidian.** Click record in a note. The audio, transcript and summary land in that same note.
-- 🗣 **Knows who spoke.** Your mic and the system audio are recorded on separate channels, so lines are labelled **Me** and **Others** without any speaker-recognition model.
-- ✨ **Summaries and action items.** A local model writes a title, summary, key points and to-do checkboxes.
-- 🔒 **Nothing leaves your Mac.** Transcription runs on [whisper.cpp](https://github.com/ggerganov/whisper.cpp), summaries on [Ollama](https://ollama.com). No account, no API key, no subscription, no cloud.
+- **Mic + system audio.** Captures your voice *and* what your Mac plays: Zoom, Teams, Meet, a browser tab, a video.
+- **Directly within Obsidian.** Click record in a note. The audio, transcript and summary land in that same note.
+- **Knows who spoke.** Your mic and the system audio are recorded on separate channels, so lines are labelled **Me** and **Others** without any speaker-recognition model.
+- **Summaries and action items.** A local model writes a title, summary, key points and to-do checkboxes.
+- **Nothing leaves your Mac.** Transcription runs on [whisper.cpp](https://github.com/ggerganov/whisper.cpp), summaries on [Ollama](https://ollama.com). No account, no API key, no subscription, no cloud.
 
 ## What you get in your note
 
@@ -245,8 +245,6 @@ styles.css          Figma-style UI
 
 ## Roadmap
 
-- [ ] Windows and Linux system-audio capture
-- [ ] Re-transcribe an existing recording
 - [ ] Custom summary prompts and templates
 - [ ] Live transcript while recording
 
