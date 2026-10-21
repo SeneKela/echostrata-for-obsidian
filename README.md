@@ -242,7 +242,7 @@ Stop ─► whisper.cpp on mic.wav + system.wav ─► merged by timestamp ─�
 
 ```bash
 git clone https://github.com/SeneKela/echostrata-for-obsidian
-cd echostrata
+cd echostrata-for-obsidian
 npm install
 npm run build   # → main.js
 npm run dev     # watch mode
