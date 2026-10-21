@@ -30,7 +30,7 @@ Meeting tools upload your conversations to someone else's servers. Echostrata do
 - **Mic + system audio.** Captures your voice *and* what your Mac plays: Zoom, Teams, Meet, a browser tab, a video.
 - **Directly within Obsidian.** Click record in a note. The audio, transcript and summary land in that same note.
 - **Knows who spoke.** Your mic and the system audio are recorded on separate channels, so lines are labelled **Me** and **Others** without any speaker-recognition model.
-- **Summaries and action items.** A local model writes a title, summary, key points and to-do checkboxes.
+- **Summaries that fit the conversation.** A local model writes a title, summary and to-do checkboxes. Six [summary templates](#summary-templates) cover meetings, 1:1s, client calls, lectures, user interviews and voice memos.
 - **Nothing leaves your Mac.** Transcription runs on [whisper.cpp](https://github.com/ggerganov/whisper.cpp), summaries on [Ollama](https://ollama.com). No account, no API key, no subscription, no cloud.
 
 ## What you get in your note
@@ -125,9 +125,35 @@ Processing time is roughly **1 minute per 20 minutes of audio**, plus a few seco
 | Start / stop recording in current note |
 | Pause / resume recording |
 | Discard current recording |
+| Record with template… |
 | Open setup assistant |
 
 Assign hotkeys in **Settings → Hotkeys → search "Echostrata"**.
+
+### Summary templates
+
+| Template | Use it for | Writes |
+|---|---|---|
+| **Meeting** (default) | Team meetings, syncs, workshops | Summary, decisions, key points, action items, open questions |
+| **1:1** | Manager / report check-ins, mentoring | Topics, wins, concerns, feedback, commitments, next check-in |
+| **Client call** | Discovery, pre-sales, account reviews | Context, needs, pain points, objections, stakeholders, deal signals, next steps, follow-up email |
+| **Lecture & learning** | Courses, talks, webinars, tutorials | Outline, concepts, examples, takeaways, references, review questions |
+| **User interview** | User research, usability tests | Profile, goals, pains, insights with evidence, opportunities, quotes |
+| **Voice memo** | Thinking aloud, ideas, drafting | Core idea, ideas, structure, tasks, open questions, tags |
+
+The template is chosen in this order, most specific first:
+
+1. **Record with template…** (command palette), for one recording.
+2. The note's `echostrata-template` property, for notes that are always the same type:
+   ```yaml
+   ---
+   echostrata-template: client-call
+   ---
+   ```
+   Valid values: `meeting`, `one-on-one`, `client-call`, `lecture`, `user-interview`, `voice-memo`.
+3. **Settings → Summary template** (default: Meeting).
+
+`qwen3:4b` handles every template. `qwen3:8b` gives noticeably better Client call and User interview results. If the model returns invalid JSON, Echostrata retries once. If that fails too, the transcript is still written, without a summary.
 
 ## Settings
 
@@ -148,7 +174,8 @@ Assign hotkeys in **Settings → Hotkeys → search "Echostrata"**.
 | | Fold transcript callout | On |
 | | whisper.cpp binary | Auto-detect |
 | | CPU threads | Automatic |
-| **Summary** | Generate title, summary, key points & action items | On |
+| **Summary** | Generate a summary | On |
+| | Summary template | Meeting |
 | | Ollama URL | `http://127.0.0.1:11434` |
 | | Ollama model | Dropdown of your installed models |
 | **Other** | Keep Mac awake | On |
@@ -193,7 +220,7 @@ System audio ────────┘         │
                                         └─► mic.wav · system.wav · mix.wav (temp, streamed to disk)
 
 Stop ─► whisper.cpp on mic.wav + system.wav ─► merged by timestamp ─► Me / Others paragraphs
-     ─► Ollama (JSON) ─► title · summary · key points · action items ─► written into the note
+     ─► Ollama (JSON, chosen template) ─► structured summary ─► written into the note
 ```
 
 - **System audio:** a tiny Swift program using Apple's ScreenCaptureKit captures what the Mac plays and streams it to the plugin. It's compiled on your Mac from source bundled in the plugin, so there's no prebuilt binary to trust.
@@ -233,7 +260,9 @@ src/
   devices.ts        microphone / loopback device detection
   session.ts        recording session + processing job (save → transcribe → summarise)
   transcriber.ts    whisper.cpp runner, models, paragraphs
-  summarizer.ts     Ollama models and summaries
+  summarizer.ts     Ollama models and chat requests
+  templates.ts      summary templates: prompts and note rendering
+  template-modal.ts "Record with template…" picker
   note.ts           in-note block insert / update / remove
   ui.ts             header button, floating bar, ribbon, status bar
   setup.ts          setup assistant

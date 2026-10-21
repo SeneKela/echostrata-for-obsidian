@@ -1,11 +1,13 @@
 import { requestUrl } from "obsidian";
 import { formatBytes } from "./system";
+import { BASE_PROMPT, SummaryTemplate } from "./templates";
 
-export interface Summary {
-	title: string;
-	summary: string;
-	keyPoints: string[];
-	actionItems: string[];
+/** Context for the user message (`{{note_title}}`, `{{date}}`, `{{duration}}`, `{{speakers}}`). */
+export interface SummaryContext {
+	noteTitle: string;
+	date: string;
+	duration: string;
+	speakers: string;
 }
 
 export interface OllamaModel {
@@ -15,17 +17,14 @@ export interface OllamaModel {
 }
 
 const MAX_CHARS = 60000;
+const RETRY_NOTE = "Your previous answer was not valid JSON. Return only the JSON object.";
 
-const PROMPT = (transcript: string) => `You are given the transcript of a recording (a meeting, call or lecture).
-Write in the SAME LANGUAGE as the transcript. Return ONLY a JSON object with these keys:
-- "title": a short, specific title (max 8 words)
-- "summary": 2-4 sentences describing what was discussed and concluded
-- "keyPoints": 3-8 concise bullet strings with the most important points, facts or decisions
-- "actionItems": bullet strings of concrete follow-ups with owner if mentioned (empty array if none)
+const userMessage = (ctx: SummaryContext, transcript: string) => `Note: ${ctx.noteTitle}
+Date: ${ctx.date} · Duration: ${ctx.duration} · Speakers: ${ctx.speakers}
 
 Transcript:
 """
-${transcript.length > MAX_CHARS ? transcript.slice(0, MAX_CHARS) + "\n[…truncated]" : transcript}
+${transcript.length > MAX_CHARS ? transcript.slice(0, MAX_CHARS) + "\n[…transcript truncated: it was too long to include in full]" : transcript}
 """`;
 
 /** Returns every model installed in Ollama, or null when Ollama is not reachable. */
@@ -60,14 +59,17 @@ export function matchInstalled(names: string[], wanted: string): string | null {
 	return null;
 }
 
-export async function summarize(baseUrl: string, model: string, transcript: string): Promise<Summary> {
+async function chat(baseUrl: string, model: string, system: string, user: string): Promise<Record<string, unknown>> {
 	const res = await requestUrl({
-		url: `${baseUrl.replace(/\/$/, "")}/api/generate`,
+		url: `${baseUrl.replace(/\/$/, "")}/api/chat`,
 		method: "POST",
 		contentType: "application/json",
 		body: JSON.stringify({
 			model,
-			prompt: PROMPT(transcript),
+			messages: [
+				{ role: "system", content: system },
+				{ role: "user", content: user },
+			],
 			stream: false,
 			format: "json",
 			think: false,
@@ -76,13 +78,29 @@ export async function summarize(baseUrl: string, model: string, transcript: stri
 		throw: false,
 	});
 	if (res.status !== 200) throw new Error(`Ollama returned HTTP ${res.status}`);
-	const raw = String(res.json.response ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+	const raw = String(res.json.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 	const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
-	const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
-	return {
-		title: String(parsed.title ?? "").trim(),
-		summary: String(parsed.summary ?? "").trim(),
-		keyPoints: list(parsed.keyPoints ?? parsed.key_points),
-		actionItems: list(parsed.actionItems ?? parsed.action_items),
-	};
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Model did not return a JSON object");
+	return parsed;
+}
+
+/**
+ * Summarises a transcript with the given template and returns the model's JSON object.
+ * Retries once if the model returns invalid JSON; throws if it fails again (HTTP errors are not retried).
+ */
+export async function summarize(
+	baseUrl: string,
+	model: string,
+	template: SummaryTemplate,
+	ctx: SummaryContext,
+	transcript: string,
+): Promise<Record<string, unknown>> {
+	const system = `${BASE_PROMPT}\n\n${template.prompt}`;
+	const user = userMessage(ctx, transcript);
+	try {
+		return await chat(baseUrl, model, system, user);
+	} catch (e) {
+		if (!(e instanceof SyntaxError) && !String((e as Error).message).startsWith("Model did not")) throw e;
+		return chat(baseUrl, model, `${system}\n\n${RETRY_NOTE}`, user);
+	}
 }

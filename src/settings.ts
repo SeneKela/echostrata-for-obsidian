@@ -3,6 +3,8 @@ import type NoteRecorderPlugin from "./main";
 import { listAudioInputs, LOOPBACK_RE, resolveSystemDevice } from "./devices";
 import { WHISPER_MODELS } from "./transcriber";
 import { listOllamaModels, matchInstalled, modelLabel } from "./summarizer";
+import { allTemplates, CustomTemplateDef, findTemplate, getTemplate, setCustomTemplates } from "./templates";
+import { TemplateEditModal } from "./template-modal";
 import {
 	buildHelper, canBuildHelper, helperBuilt, helperPath, NativeAudioError, nativeSupported,
 	openScreenRecordingSettings, testNative,
@@ -26,6 +28,8 @@ export interface RecorderSettings {
 	showTimestamps: boolean;
 	transcriptFolded: boolean;
 	summaryEnabled: boolean;
+	summaryTemplate: string; // id of a template in templates.ts
+	customTemplates: CustomTemplateDef[];
 	ollamaUrl: string;
 	ollamaModel: string;
 	keepAwake: boolean;
@@ -51,6 +55,8 @@ export const DEFAULT_SETTINGS: RecorderSettings = {
 	showTimestamps: true,
 	transcriptFolded: true,
 	summaryEnabled: true,
+	summaryTemplate: "meeting",
+	customTemplates: [],
 	ollamaUrl: "http://127.0.0.1:11434",
 	ollamaModel: "qwen3:4b",
 	keepAwake: true,
@@ -298,11 +304,61 @@ export class RecorderSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName("Summary (Ollama, optional)").setHeading();
 
-		new Setting(containerEl).setName("Generate title, summary, key points & action items").addToggle((t) =>
+		new Setting(containerEl).setName("Generate a summary").addToggle((t) =>
 			t.setValue(s.summaryEnabled).onChange(async (v) => {
 				s.summaryEnabled = v;
 				await save();
 			}));
+
+		const templateSetting = new Setting(containerEl).setName("Summary template");
+		const describeTemplate = () => {
+			const t = getTemplate(s.summaryTemplate);
+			templateSetting.setDesc(
+				`${t.useFor}. Writes: ${t.writes}.${t.hint ? " " + t.hint : ""} ` +
+				"Override per recording with “Record with template…”, or set echostrata-template in the note's properties.",
+			);
+		};
+		templateSetting.addDropdown((d) => {
+			const templates = allTemplates();
+			templates.forEach((t) => d.addOption(t.id, t.name));
+			d.setValue(findTemplate(s.summaryTemplate)?.id ?? templates[0].id).onChange(async (v) => {
+				s.summaryTemplate = v;
+				describeTemplate();
+				await save();
+			});
+		});
+		describeTemplate();
+
+		const customHeader = new Setting(containerEl)
+			.setName("Custom templates")
+			.setDesc("Write your own instructions for the summary. They appear next to the built-in templates.")
+			.addButton((b) => b.setButtonText("Add template").onClick(() => {
+				new TemplateEditModal(this.app, null, s.customTemplates.map((c) => c.id), async (def) => {
+					s.customTemplates.push(def);
+					await this.saveTemplates();
+					this.display();
+				}).open();
+			}));
+		customHeader.settingEl.addClass("nrt-tpl-header");
+
+		for (const def of s.customTemplates) {
+			new Setting(containerEl)
+				.setName(def.name)
+				.setDesc(def.useFor || "Custom template")
+				.addButton((b) => b.setButtonText("Edit").onClick(() => {
+					new TemplateEditModal(this.app, def, [], async (updated) => {
+						Object.assign(def, updated, { id: def.id });
+						await this.saveTemplates();
+						this.display();
+					}).open();
+				}))
+				.addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(async () => {
+					s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
+					if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
+					await this.saveTemplates();
+					this.display();
+				}));
+		}
 
 		new Setting(containerEl)
 			.setName("Ollama URL")
@@ -327,6 +383,11 @@ export class RecorderSettingTab extends PluginSettingTab {
 				s.keepAwake = v;
 				await save();
 			}));
+	}
+
+	private async saveTemplates(): Promise<void> {
+		setCustomTemplates(this.plugin.settings.customTemplates);
+		await this.plugin.saveSettings();
 	}
 
 	/** Dropdown of every model installed in Ollama (falls back to a text field when Ollama is offline). */

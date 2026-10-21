@@ -1,5 +1,6 @@
-import { MarkdownView, setIcon } from "obsidian";
+import { MarkdownView, Menu, setIcon } from "obsidian";
 import type NoteRecorderPlugin from "./main";
+import { allTemplates } from "./templates";
 import { formatClock } from "./transcriber";
 
 const WAVE_BARS = 48;
@@ -232,6 +233,7 @@ class RecordingBar {
 			this.button(btns, session.phase === "paused" ? "play" : "pause", session.phase === "paused" ? "Resume" : "Pause", "", () =>
 				this.plugin.togglePause());
 			this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => this.plugin.stopRecording(), "Stop");
+			this.button(btns, "chevron-down", "Summary template", "nrt-more", (e) => this.showTemplateMenu(e));
 			this.button(btns, "x", "Discard recording", "nrt-discard", () => this.plugin.cancelRecording());
 			this.draw();
 			return;
@@ -312,14 +314,30 @@ class RecordingBar {
 		return m.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
 	}
 
-	private button(parent: HTMLElement, icon: string, label: string, cls: string, onClick: () => void, text?: string): void {
+	private button(parent: HTMLElement, icon: string, label: string, cls: string, onClick: (e: MouseEvent) => void, text?: string): void {
 		const b = parent.createEl("button", { cls: `nrt-btn ${cls}`.trim(), attr: { "aria-label": label } });
 		putIcon(b.createSpan({ cls: "nrt-btn-icon" }), icon);
 		if (text) b.createSpan({ text });
 		b.addEventListener("click", (e) => {
 			e.preventDefault();
-			onClick();
+			onClick(e);
 		});
+	}
+
+	/** Dropdown to pick the summary template for the running recording. */
+	private showTemplateMenu(e: MouseEvent): void {
+		const session = this.plugin.session;
+		if (!session || session.file.path !== this.path) return;
+		const current = session.activeTemplate.id;
+		const menu = new Menu();
+		menu.addItem((i) => i.setTitle("Summary template").setIsLabel(true));
+		for (const t of allTemplates()) {
+			menu.addItem((i) =>
+				i.setTitle(t.name).setChecked(t.id === current).onClick(() => {
+					session.templateId = t.id;
+				}));
+		}
+		menu.showAtMouseEvent(e);
 	}
 
 	destroy(): void {

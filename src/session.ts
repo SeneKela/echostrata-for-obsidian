@@ -7,12 +7,18 @@ import { buildHelper, canBuildHelper, helperBuilt, helperPath, NativeAudioError,
 import { callout, insertBlock, removeBlock, updateBlock } from "./note";
 import { findWhisper, makeWorkDir, removeDir } from "./system";
 import { formatClock, modelPathFor, Paragraph, Segment, toParagraphs, transcribeWav } from "./transcriber";
-import { summarize, Summary } from "./summarizer";
+import { summarize } from "./summarizer";
+import { getTemplate, RenderedSummary, SummaryTemplate } from "./templates";
 
 export type RecPhase = "starting" | "recording" | "paused" | "stopping";
 export type JobPhase = "saving" | "transcribing" | "summarizing" | "done" | "error";
 
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+function isoDate(d: Date): string {
+	const p = (n: number) => String(n).padStart(2, "0");
+	return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 function stamp(d = new Date()): string {
 	const p = (n: number) => String(n).padStart(2, "0");
@@ -30,8 +36,20 @@ export class RecordingSession {
 	private recorder: AudioRecorder | null = null;
 	private workDir: string;
 
-	constructor(private readonly plugin: NoteRecorderPlugin, readonly file: TFile, private readonly view: MarkdownView | null) {
+	constructor(
+		private readonly plugin: NoteRecorderPlugin,
+		readonly file: TFile,
+		private readonly view: MarkdownView | null,
+		/** Summary template chosen for this recording; can be changed while recording. */
+		public templateId?: string,
+	) {
 		this.workDir = makeWorkDir(this.id);
+	}
+
+	/** Template that will be used: explicit choice, else the note's `echostrata-template`, else the setting. */
+	get activeTemplate(): SummaryTemplate {
+		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter?.["echostrata-template"];
+		return getTemplate(this.templateId ?? fm ?? this.plugin.settings.summaryTemplate);
 	}
 
 	get elapsedMs(): number {
@@ -119,7 +137,7 @@ export class RecordingSession {
 	async stop(): Promise<ProcessingJob> {
 		this.phase = "stopping";
 		const result = await this.recorder!.stop();
-		return new ProcessingJob(this.plugin, this.file, this.id, this.startedAt, this.workDir, result);
+		return new ProcessingJob(this.plugin, this.file, this.id, this.startedAt, this.workDir, result, this.templateId);
 	}
 
 	async cancel(): Promise<void> {
@@ -147,7 +165,14 @@ export class ProcessingJob {
 		private readonly startedAt: Date,
 		private readonly workDir: string,
 		private readonly rec: RecorderResult,
+		private readonly templateId?: string,
 	) {}
+
+	/** Template chosen for this recording, else the note's `echostrata-template` frontmatter, else the setting. */
+	private resolveTemplate(): SummaryTemplate {
+		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter?.["echostrata-template"];
+		return getTemplate(this.templateId ?? fm ?? this.plugin.settings.summaryTemplate);
+	}
 
 	private set(phase: JobPhase, message: string, progress = this.progress): void {
 		this.phase = phase;
@@ -171,11 +196,24 @@ export class ProcessingJob {
 
 			this.set("transcribing", "Transcribing…", 0);
 			const paragraphs = await this.transcribe(bin, model);
-			let summary: Summary | null = null;
+			let summary: RenderedSummary | null = null;
 			if (s.summaryEnabled && paragraphs.length) {
 				this.set("summarizing", "Writing summary…", 100);
 				try {
-					summary = await summarize(s.ollamaUrl, s.ollamaModel, plain(paragraphs));
+					const template = this.resolveTemplate();
+					const data = await summarize(
+						s.ollamaUrl,
+						s.ollamaModel,
+						template,
+						{
+							noteTitle: this.file.basename,
+							date: isoDate(this.startedAt),
+							duration: formatClock(this.rec.durationMs),
+							speakers: [...new Set(paragraphs.map((p) => p.speaker).filter(Boolean))].join(", ") || s.micSpeakerName,
+						},
+						plain(paragraphs),
+					);
+					summary = template.render(data);
 				} catch (e) {
 					console.warn("[note-recorder] summary skipped", e);
 				}
@@ -243,15 +281,10 @@ export class ProcessingJob {
 		return toParagraphs(all);
 	}
 
-	private render(paragraphs: Paragraph[], summary: Summary | null): string {
+	private render(paragraphs: Paragraph[], summary: RenderedSummary | null): string {
 		const s = this.plugin.settings;
 		const parts: string[] = [this.embed];
-		if (summary) {
-			const lines: string[] = [summary.summary];
-			if (summary.keyPoints.length) lines.push("", "**Key points**", ...summary.keyPoints.map((k) => `- ${k}`));
-			if (summary.actionItems.length) lines.push("", "**Action items**", ...summary.actionItems.map((a) => `- [ ] ${a}`));
-			parts.push(callout("abstract", summary.title || "Summary", lines));
-		}
+		if (summary) parts.push(...summary.blocks);
 		const speakers = [...new Set(paragraphs.map((p) => p.speaker).filter(Boolean))];
 		const title = `Transcript · ${formatClock(this.rec.durationMs)}${speakers.length ? " · " + speakers.join(" / ") : ""}`;
 		const body = paragraphs.length

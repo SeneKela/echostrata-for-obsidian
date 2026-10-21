@@ -5,6 +5,8 @@ import { DEFAULT_SETTINGS, RecorderSettings, RecorderSettingTab } from "./settin
 import { ProcessingJob, RecordingSession } from "./session";
 import { NoteUI } from "./ui";
 import { SetupModal } from "./setup";
+import { TemplateModal } from "./template-modal";
+import { setCustomTemplates } from "./templates";
 import { startCaffeinate } from "./system";
 
 export default class NoteRecorderPlugin extends Plugin {
@@ -34,6 +36,15 @@ export default class NoteRecorderPlugin extends Plugin {
 		this.addSettingTab(new RecorderSettingTab(this.app, this));
 
 		this.addCommand({ id: "toggle-recording", name: "Start / stop recording in current note", callback: () => this.toggleRecording() });
+		this.addCommand({
+			id: "record-with-template",
+			name: "Record with template…",
+			checkCallback: (checking) => {
+				if (this.session || !this.app.workspace.getActiveViewOfType(MarkdownView)?.file) return false;
+				if (!checking) new TemplateModal(this.app, (t) => void this.startRecording(undefined, t.id)).open();
+				return true;
+			},
+		});
 		this.addCommand({
 			id: "pause-recording",
 			name: "Pause / resume recording",
@@ -87,13 +98,13 @@ export default class NoteRecorderPlugin extends Plugin {
 		void this.startRecording(view);
 	}
 
-	async startRecording(view?: MarkdownView): Promise<void> {
+	async startRecording(view?: MarkdownView, templateId?: string): Promise<void> {
 		const target = view ?? this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!target?.file) {
 			new Notice("Open a note first — the recording is added to it.");
 			return;
 		}
-		const session = new RecordingSession(this, target.file, target);
+		const session = new RecordingSession(this, target.file, target, templateId);
 		this.session = session;
 		this.ui.refresh();
 		try {
@@ -180,6 +191,7 @@ export default class NoteRecorderPlugin extends Plugin {
 	async loadSettings(): Promise<void> {
 		const data = (await this.loadData()) ?? {};
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		setCustomTemplates(this.settings.customTemplates);
 		// v2: built-in macOS capture replaces BlackHole auto-detect as the default system source.
 		if ((data.settingsVersion ?? 1) < 2) {
 			if (this.settings.systemDeviceId === "auto") this.settings.systemDeviceId = "native";

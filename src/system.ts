@@ -29,6 +29,31 @@ export function findExecutable(names: string[], override?: string): string | nul
 }
 
 export const findWhisper = (override?: string) => findExecutable(["whisper-cli", "whisper-cpp"], override);
+
+/** Opens the system file picker and resolves with the chosen file's absolute path (null if cancelled). */
+export function pickFile(): Promise<string | null> {
+	return new Promise((resolve) => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.addEventListener("change", () => {
+			const file = input.files?.[0] as (File & { path?: string }) | undefined;
+			if (!file) return resolve(null);
+			let p = file.path; // Electron < 32
+			if (!p) {
+				try {
+					// Newer Electron removed File.path
+					p = (window as any).require("electron").webUtils.getPathForFile(file);
+				} catch {
+					/* unavailable */
+				}
+			}
+			resolve(p || null);
+		});
+		input.addEventListener("cancel", () => resolve(null));
+		input.click();
+	});
+}
+
 export const findBrew = () => findExecutable(["brew"]);
 
 export function makeWorkDir(id: string): string {

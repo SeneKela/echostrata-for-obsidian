@@ -2,7 +2,7 @@ import { App, Modal, Platform, setIcon } from "obsidian";
 import * as fs from "fs";
 import type NoteRecorderPlugin from "./main";
 import { listAudioInputs, LOOPBACK_RE } from "./devices";
-import { downloadFile, findBrew, findWhisper, formatBytes, openApp, postNdjson, run, runInTerminal } from "./system";
+import { downloadFile, findBrew, findWhisper, formatBytes, openApp, pickFile, postNdjson, run, runInTerminal } from "./system";
 import { getModel, modelPathFor, modelUrl } from "./transcriber";
 import { listOllamaModels, matchInstalled, modelLabel } from "./summarizer";
 import { buildHelper, canBuildHelper, helperBuilt, nativeSupported, openScreenRecordingSettings } from "./native-audio";
@@ -127,6 +127,7 @@ export class SetupModal extends Modal {
 		// 3. whisper.cpp
 		const whisper = findWhisper(s.whisperPath);
 		const brew = findBrew();
+		const locate = { label: "Locate on this Mac…", run: () => void this.locateWhisper() };
 		if (!this.busy.has("whisper")) {
 			this.rows.whisper = whisper
 				? { status: "ok", title: "Speech engine (whisper.cpp)", desc: whisper }
@@ -134,14 +135,14 @@ export class SetupModal extends Modal {
 					? {
 						status: "missing",
 						title: "Speech engine (whisper.cpp)",
-						desc: "Installs Homebrew's whisper-cpp (uses Apple Silicon GPU via Metal).",
-						actions: [{ label: "Install", cta: true, run: () => void this.installWhisper(brew) }],
+						desc: "Installs Homebrew's whisper-cpp (uses Apple Silicon GPU via Metal), or pick an existing whisper-cli binary.",
+						actions: [{ label: "Install", cta: true, run: () => void this.installWhisper(brew) }, locate],
 					}
 					: {
 						status: "missing",
 						title: "Speech engine (whisper.cpp)",
-						desc: "Homebrew is required. Install it from brew.sh, then press Re-check.",
-						actions: [{ label: "Open brew.sh", run: () => window.open("https://brew.sh") }],
+						desc: "Already have whisper-cli somewhere? Locate it. Otherwise install Homebrew from brew.sh, then press Re-check.",
+						actions: [locate, { label: "Open brew.sh", run: () => window.open("https://brew.sh") }],
 					};
 		}
 
@@ -230,6 +231,14 @@ export class SetupModal extends Modal {
 		await this.check();
 	}
 
+	private async locateWhisper(): Promise<void> {
+		const p = await pickFile();
+		if (!p) return;
+		this.plugin.settings.whisperPath = p;
+		await this.plugin.saveSettings();
+		await this.check();
+	}
+
 	private async installWhisper(brew: string): Promise<void> {
 		this.busy.add("whisper");
 		const row: Row = { status: "working", title: "Speech engine (whisper.cpp)", desc: "Installing with Homebrew…", progress: null, log: "" };
@@ -293,6 +302,10 @@ export class SetupModal extends Modal {
 	}
 
 	private draw(): void {
+		// The content area scrolls; keep its position and height stable while the list is rebuilt.
+		const scroller = this.contentEl;
+		const top = scroller.scrollTop;
+		this.listEl.style.minHeight = `${this.listEl.offsetHeight}px`;
 		this.listEl.empty();
 		for (const row of Object.values(this.rows)) {
 			const r = this.listEl.createDiv({ cls: `nrt-setup-row is-${row.status}` });
@@ -332,6 +345,8 @@ export class SetupModal extends Modal {
 					a.createEl("button", { text: act.label, cls: act.cta ? "mod-cta" : "" }).addEventListener("click", act.run));
 			}
 		}
+		this.listEl.style.minHeight = "";
+		scroller.scrollTop = top;
 	}
 
 	onClose(): void {
