@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-note-recorder-transcriber",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"main": "main.js",
 	"scripts": { "dev": "node esbuild.config.mjs", "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production" },
 	"license": "MIT",
