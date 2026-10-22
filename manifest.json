@@ -1,7 +1,7 @@
 {
 	"id": "echostrata",
 	"name": "Echostrata",
-	"version": "1.5.0",
+	"version": "1.5.1",
 	"minAppVersion": "1.5.7",
 	"description": "Record microphone + Mac system audio right inside a note, then transcribe (whisper.cpp) and summarise (Ollama) locally.",
 	"author": "Martin Burkel",
