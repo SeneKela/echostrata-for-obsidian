@@ -64,6 +64,30 @@ export default class NoteRecorderPlugin extends Plugin {
 				return true;
 			},
 		});
+		this.addCommand({
+			id: "toggle-mic-mute",
+			name: "Mute / unmute microphone",
+			checkCallback: (checking) => {
+				if (!this.session || this.session.phase === "starting" || this.session.phase === "stopping") return false;
+				if (!checking) {
+					this.session.toggleMicMute();
+					this.ui.refresh();
+				}
+				return true;
+			},
+		});
+		this.addCommand({
+			id: "toggle-system-mute",
+			name: "Mute / unmute system audio",
+			checkCallback: (checking) => {
+				if (!this.session || !this.session.hasSystem || this.session.phase === "starting" || this.session.phase === "stopping") return false;
+				if (!checking) {
+					this.session.toggleSysMute();
+					this.ui.refresh();
+				}
+				return true;
+			},
+		});
 		this.addCommand({ id: "open-setup", name: "Open setup assistant", callback: () => this.openSetup() });
 		registerResummarize(this);
 

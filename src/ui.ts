@@ -178,8 +178,15 @@ class RecordingBar {
 	private canvas: HTMLCanvasElement | null = null;
 	private micFill: HTMLElement | null = null;
 	private sysFill: HTMLElement | null = null;
+	private micMeterEl: HTMLElement | null = null;
+	private micIconEl: HTMLElement | null = null;
+	private sysMeterEl: HTMLElement | null = null;
+	private sysIconEl: HTMLElement | null = null;
+	private micMutedState: boolean | null = null;
+	private sysMutedState: boolean | null = null;
 	private progressFill: HTMLElement | null = null;
 	private progressText: HTMLElement | null = null;
+	private templateTextEl: HTMLElement | null = null;
 	private history = new Float32Array(WAVE_BARS);
 	private drawPending = false;
 
@@ -203,7 +210,8 @@ class RecordingBar {
 	private build(): void {
 		const el = this.el;
 		el.empty();
-		this.timeEl = this.canvas = this.micFill = this.sysFill = this.progressFill = this.progressText = null;
+		this.timeEl = this.canvas = this.micFill = this.sysFill = this.micMeterEl = this.micIconEl = this.sysMeterEl = this.sysIconEl = this.progressFill = this.progressText = this.templateTextEl = null;
+		this.micMutedState = this.sysMutedState = null;
 		const session = this.plugin.session?.file.path === this.path ? this.plugin.session : null;
 		const job = this.plugin.jobs.find((j) => j.file.path === this.path);
 		el.dataset.state = session ? session.phase : job ? job.phase : "none";
@@ -222,18 +230,76 @@ class RecordingBar {
 			this.canvas = el.createEl("canvas", { cls: "nrt-wave" });
 
 			const meters = el.createDiv({ cls: "nrt-meters" });
-			this.micFill = this.meter(meters, "mic", "Microphone");
-			if (session.hasSystem) this.sysFill = this.meter(meters, "monitor-speaker", "System audio");
-			else {
+
+			const micMeter = meters.createDiv({ cls: "nrt-meter" });
+			const micIcon = micMeter.createSpan({ cls: "nrt-meter-icon nrt-meter-btn" });
+			micIcon.setAttr("role", "button");
+			micIcon.setAttr("tabindex", "0");
+			micIcon.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				const s = this.plugin.session;
+				if (s && s.file.path === this.path) {
+					s.toggleMicMute();
+					this.updateMuteState();
+				}
+			});
+			micIcon.addEventListener("keydown", (e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					const s = this.plugin.session;
+					if (s && s.file.path === this.path) {
+						s.toggleMicMute();
+						this.updateMuteState();
+					}
+				}
+			});
+			this.micIconEl = micIcon;
+			this.micMeterEl = micMeter;
+			this.micFill = micMeter.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
+
+			if (session.hasSystem) {
+				const sysMeter = meters.createDiv({ cls: "nrt-meter" });
+				const sysIcon = sysMeter.createSpan({ cls: "nrt-meter-icon nrt-meter-btn" });
+				sysIcon.setAttr("role", "button");
+				sysIcon.setAttr("tabindex", "0");
+				sysIcon.addEventListener("click", (e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					const s = this.plugin.session;
+					if (s && s.file.path === this.path) {
+						s.toggleSysMute();
+						this.updateMuteState();
+					}
+				});
+				sysIcon.addEventListener("keydown", (e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						e.preventDefault();
+						const s = this.plugin.session;
+						if (s && s.file.path === this.path) {
+							s.toggleSysMute();
+							this.updateMuteState();
+						}
+					}
+				});
+				this.sysIconEl = sysIcon;
+				this.sysMeterEl = sysMeter;
+				this.sysFill = sysMeter.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
+			} else {
 				const off = meters.createDiv({ cls: "nrt-meter nrt-meter-off", attr: { "aria-label": "System audio not captured" } });
 				putIcon(off.createSpan({ cls: "nrt-meter-icon" }), "volume-x");
 			}
+
+			this.updateMuteState(true);
 
 			const btns = el.createDiv({ cls: "nrt-buttons" });
 			this.button(btns, session.phase === "paused" ? "play" : "pause", session.phase === "paused" ? "Resume" : "Pause", "", () =>
 				this.plugin.togglePause());
 			this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => void this.plugin.stopRecording(), "Stop");
-			this.button(btns, "chevron-down", "Summary template", "nrt-more", (e) => this.showTemplateMenu(e));
+			const moreBtn = btns.createEl("button", { cls: "nrt-btn nrt-more", attr: { "aria-label": "Summary template" } });
+			this.templateTextEl = moreBtn.createSpan({ text: session.activeTemplate.name });
+			putIcon(moreBtn.createSpan({ cls: "nrt-btn-icon" }), "chevron-down");
+			moreBtn.addEventListener("click", (e) => { e.preventDefault(); this.showTemplateMenu(e); });
 			this.button(btns, "x", "Discard recording", "nrt-discard", () => void this.plugin.cancelRecording());
 			this.draw();
 			return;
@@ -257,6 +323,8 @@ class RecordingBar {
 	tick(): void {
 		const session = this.plugin.session?.file.path === this.path ? this.plugin.session : null;
 		if (session && this.timeEl) this.timeEl.setText(formatClock(session.elapsedMs));
+		if (session && this.templateTextEl) this.templateTextEl.setText(session.activeTemplate.name);
+		if (session) this.updateMuteState();
 		const job = this.plugin.jobs.find((j) => j.file.path === this.path);
 		if (job && this.progressText) {
 			this.progressText.setText(job.phase === "transcribing" ? `${job.message} ${job.progress}%` : job.message);
@@ -264,13 +332,49 @@ class RecordingBar {
 		}
 	}
 
+	private updateMuteState(force = false): void {
+		const session = this.plugin.session?.file.path === this.path ? this.plugin.session : null;
+		if (!session) return;
+
+		if (this.micIconEl && this.micMeterEl) {
+			const muted = session.isMicMuted;
+			if (force || this.micMutedState !== muted) {
+				this.micMutedState = muted;
+				this.micMeterEl.toggleClass("is-muted", muted);
+				this.micIconEl.toggleClass("is-muted", muted);
+				putIcon(this.micIconEl, muted ? "mic-off" : "mic");
+				this.micIconEl.setAttr("aria-label", muted ? "Unmute microphone" : "Mute microphone");
+				if (muted && this.micFill) {
+					this.micFill.setCssProps({ width: "0%" });
+				}
+			}
+		}
+
+		if (this.sysIconEl && this.sysMeterEl) {
+			const muted = session.isSysMuted;
+			if (force || this.sysMutedState !== muted) {
+				this.sysMutedState = muted;
+				this.sysMeterEl.toggleClass("is-muted", muted);
+				this.sysIconEl.toggleClass("is-muted", muted);
+				putIcon(this.sysIconEl, muted ? "volume-x" : "monitor-speaker");
+				this.sysIconEl.setAttr("aria-label", muted ? "Unmute system audio" : "Mute system audio");
+				if (muted && this.sysFill) {
+					this.sysFill.setCssProps({ width: "0%" });
+				}
+			}
+		}
+	}
+
 	pushLevel(mic: number, sys: number): void {
-		const level = Math.max(mic, sys);
+		const session = this.plugin.session?.file.path === this.path ? this.plugin.session : null;
+		const effectiveMic = session?.isMicMuted ? 0 : mic;
+		const effectiveSys = session?.isSysMuted ? 0 : sys;
+		const level = Math.max(effectiveMic, effectiveSys);
 		this.history.copyWithin(0, 1);
 		this.history[WAVE_BARS - 1] = Math.min(1, level);
 		const curve = (v: number) => `${Math.round(Math.min(1, Math.pow(Math.max(0, v), 0.5)) * 100)}%`;
-		if (this.micFill) this.micFill.setCssProps({ width: curve(mic) });
-		if (this.sysFill) this.sysFill.setCssProps({ width: curve(sys) });
+		if (this.micFill) this.micFill.setCssProps({ width: session?.isMicMuted ? "0%" : curve(mic) });
+		if (this.sysFill) this.sysFill.setCssProps({ width: session?.isSysMuted ? "0%" : curve(sys) });
 		if (!this.drawPending) {
 			this.drawPending = true;
 			window.requestAnimationFrame(() => {
@@ -306,12 +410,6 @@ class RecordingBar {
 			g.fill();
 		}
 		g.globalAlpha = 1;
-	}
-
-	private meter(parent: HTMLElement, icon: string, label: string): HTMLElement {
-		const m = parent.createDiv({ cls: "nrt-meter", attr: { "aria-label": label } });
-		putIcon(m.createSpan({ cls: "nrt-meter-icon" }), icon);
-		return m.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
 	}
 
 	private button(parent: HTMLElement, icon: string, label: string, cls: string, onClick: (e: MouseEvent) => void, text?: string): void {

@@ -121,6 +121,8 @@ export class AudioRecorder {
 	private mediaRecorder: MediaRecorder | null = null;
 	private chunks: Blob[] = [];
 	private tap: AudioNode | null = null;
+	private micGainNode: GainNode | null = null;
+	private sysGainNode: GainNode | null = null;
 	private micWriter: WavWriter | null = null;
 	private sysWriter: WavWriter | null = null;
 	private mixWriter: WavWriter | null = null;
@@ -132,11 +134,49 @@ export class AudioRecorder {
 	private native: NativeSystemAudio | null = null;
 	private feed: AudioWorkletNode | null = null;
 	private workletReady = false;
+	private micMuted = false;
+	private sysMuted = false;
 	hasSystem = false;
 	/** Set when the requested system source could not be opened. */
 	systemError: Error | null = null;
 
 	constructor(private readonly o: RecorderOptions) {}
+
+	get isMicMuted(): boolean {
+		return this.micMuted;
+	}
+
+	get isSysMuted(): boolean {
+		return this.sysMuted;
+	}
+
+	setMicMuted(muted: boolean): void {
+		this.micMuted = muted;
+		if (this.micGainNode && this.ctx) {
+			const target = muted ? 0 : this.o.micGain;
+			this.micGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+			this.micGainNode.gain.setValueAtTime(target, this.ctx.currentTime);
+		}
+	}
+
+	toggleMicMute(): boolean {
+		this.setMicMuted(!this.micMuted);
+		return this.micMuted;
+	}
+
+	setSysMuted(muted: boolean): void {
+		this.sysMuted = muted;
+		if (this.sysGainNode && this.ctx) {
+			const target = muted ? 0 : this.o.systemGain;
+			this.sysGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+			this.sysGainNode.gain.setValueAtTime(target, this.ctx.currentTime);
+		}
+	}
+
+	toggleSysMute(): boolean {
+		this.setSysMuted(!this.sysMuted);
+		return this.sysMuted;
+	}
 
 	get paused(): boolean {
 		return this.pausedAt > 0;
@@ -203,13 +243,15 @@ export class AudioRecorder {
 		const recDest = ctx.createMediaStreamDestination();
 		recDest.channelCount = 1;
 
-		const micGain = this.monoGain(ctx, o.micGain);
+		const micGain = this.monoGain(ctx, this.micMuted ? 0 : o.micGain);
+		this.micGainNode = micGain;
 		ctx.createMediaStreamSource(mic).connect(micGain);
 		micGain.connect(merger, 0, 0);
 		micGain.connect(recDest);
 
 		if (this.hasSystem) {
-			const sysGain = this.monoGain(ctx, o.systemGain);
+			const sysGain = this.monoGain(ctx, this.sysMuted ? 0 : o.systemGain);
+			this.sysGainNode = sysGain;
 			if (sys) {
 				ctx.createMediaStreamSource(sys).connect(sysGain);
 			} else {
@@ -359,6 +401,10 @@ export class AudioRecorder {
 		this.native?.stop();
 		this.native = null;
 		this.feed?.disconnect();
+		this.micGainNode?.disconnect();
+		this.sysGainNode?.disconnect();
+		this.micGainNode = null;
+		this.sysGainNode = null;
 		if (this.tap) {
 			if (this.tap instanceof AudioWorkletNode) this.tap.port.onmessage = null;
 			if (this.tap instanceof ScriptProcessorNode) this.tap.onaudioprocess = null;

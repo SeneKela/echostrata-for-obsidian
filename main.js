@@ -1750,6 +1750,8 @@ var AudioRecorder = class {
     this.mediaRecorder = null;
     this.chunks = [];
     this.tap = null;
+    this.micGainNode = null;
+    this.sysGainNode = null;
     this.micWriter = null;
     this.sysWriter = null;
     this.mixWriter = null;
@@ -1761,9 +1763,41 @@ var AudioRecorder = class {
     this.native = null;
     this.feed = null;
     this.workletReady = false;
+    this.micMuted = false;
+    this.sysMuted = false;
     this.hasSystem = false;
     /** Set when the requested system source could not be opened. */
     this.systemError = null;
+  }
+  get isMicMuted() {
+    return this.micMuted;
+  }
+  get isSysMuted() {
+    return this.sysMuted;
+  }
+  setMicMuted(muted) {
+    this.micMuted = muted;
+    if (this.micGainNode && this.ctx) {
+      const target = muted ? 0 : this.o.micGain;
+      this.micGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.micGainNode.gain.setValueAtTime(target, this.ctx.currentTime);
+    }
+  }
+  toggleMicMute() {
+    this.setMicMuted(!this.micMuted);
+    return this.micMuted;
+  }
+  setSysMuted(muted) {
+    this.sysMuted = muted;
+    if (this.sysGainNode && this.ctx) {
+      const target = muted ? 0 : this.o.systemGain;
+      this.sysGainNode.gain.cancelScheduledValues(this.ctx.currentTime);
+      this.sysGainNode.gain.setValueAtTime(target, this.ctx.currentTime);
+    }
+  }
+  toggleSysMute() {
+    this.setSysMuted(!this.sysMuted);
+    return this.sysMuted;
   }
   get paused() {
     return this.pausedAt > 0;
@@ -1823,12 +1857,14 @@ var AudioRecorder = class {
     const merger = ctx.createChannelMerger(2);
     const recDest = ctx.createMediaStreamDestination();
     recDest.channelCount = 1;
-    const micGain = this.monoGain(ctx, o.micGain);
+    const micGain = this.monoGain(ctx, this.micMuted ? 0 : o.micGain);
+    this.micGainNode = micGain;
     ctx.createMediaStreamSource(mic).connect(micGain);
     micGain.connect(merger, 0, 0);
     micGain.connect(recDest);
     if (this.hasSystem) {
-      const sysGain = this.monoGain(ctx, o.systemGain);
+      const sysGain = this.monoGain(ctx, this.sysMuted ? 0 : o.systemGain);
+      this.sysGainNode = sysGain;
       if (sys) {
         ctx.createMediaStreamSource(sys).connect(sysGain);
       } else {
@@ -1964,11 +2000,15 @@ var AudioRecorder = class {
     await this.teardown();
   }
   async teardown() {
-    var _a, _b;
+    var _a, _b, _c, _d;
     this.closed = true;
     (_a = this.native) == null ? void 0 : _a.stop();
     this.native = null;
     (_b = this.feed) == null ? void 0 : _b.disconnect();
+    (_c = this.micGainNode) == null ? void 0 : _c.disconnect();
+    (_d = this.sysGainNode) == null ? void 0 : _d.disconnect();
+    this.micGainNode = null;
+    this.sysGainNode = null;
     if (this.tap) {
       if (this.tap instanceof AudioWorkletNode) this.tap.port.onmessage = null;
       if (this.tap instanceof ScriptProcessorNode) this.tap.onaudioprocess = null;
@@ -2025,6 +2065,30 @@ var RecordingSession = class {
   get hasSystem() {
     var _a;
     return !!((_a = this.recorder) == null ? void 0 : _a.hasSystem);
+  }
+  get isMicMuted() {
+    var _a, _b;
+    return (_b = (_a = this.recorder) == null ? void 0 : _a.isMicMuted) != null ? _b : false;
+  }
+  get isSysMuted() {
+    var _a, _b;
+    return (_b = (_a = this.recorder) == null ? void 0 : _a.isSysMuted) != null ? _b : false;
+  }
+  setMicMuted(muted) {
+    var _a;
+    (_a = this.recorder) == null ? void 0 : _a.setMicMuted(muted);
+  }
+  toggleMicMute() {
+    var _a, _b;
+    return (_b = (_a = this.recorder) == null ? void 0 : _a.toggleMicMute()) != null ? _b : false;
+  }
+  setSysMuted(muted) {
+    var _a;
+    (_a = this.recorder) == null ? void 0 : _a.setSysMuted(muted);
+  }
+  toggleSysMute() {
+    var _a, _b;
+    return (_b = (_a = this.recorder) == null ? void 0 : _a.toggleSysMute()) != null ? _b : false;
   }
   async start() {
     var _a;
@@ -2415,8 +2479,15 @@ var RecordingBar = class {
     this.canvas = null;
     this.micFill = null;
     this.sysFill = null;
+    this.micMeterEl = null;
+    this.micIconEl = null;
+    this.sysMeterEl = null;
+    this.sysIconEl = null;
+    this.micMutedState = null;
+    this.sysMutedState = null;
     this.progressFill = null;
     this.progressText = null;
+    this.templateTextEl = null;
     this.history = new Float32Array(WAVE_BARS);
     this.drawPending = false;
     host.addClass("nrt-host");
@@ -2438,7 +2509,8 @@ var RecordingBar = class {
     var _a;
     const el = this.el;
     el.empty();
-    this.timeEl = this.canvas = this.micFill = this.sysFill = this.progressFill = this.progressText = null;
+    this.timeEl = this.canvas = this.micFill = this.sysFill = this.micMeterEl = this.micIconEl = this.sysMeterEl = this.sysIconEl = this.progressFill = this.progressText = this.templateTextEl = null;
+    this.micMutedState = this.sysMutedState = null;
     const session = ((_a = this.plugin.session) == null ? void 0 : _a.file.path) === this.path ? this.plugin.session : null;
     const job = this.plugin.jobs.find((j) => j.file.path === this.path);
     el.dataset.state = session ? session.phase : job ? job.phase : "none";
@@ -2454,16 +2526,74 @@ var RecordingBar = class {
       this.timeEl = rec.createSpan({ cls: "nrt-time" });
       this.canvas = el.createEl("canvas", { cls: "nrt-wave" });
       const meters = el.createDiv({ cls: "nrt-meters" });
-      this.micFill = this.meter(meters, "mic", "Microphone");
-      if (session.hasSystem) this.sysFill = this.meter(meters, "monitor-speaker", "System audio");
-      else {
+      const micMeter = meters.createDiv({ cls: "nrt-meter" });
+      const micIcon = micMeter.createSpan({ cls: "nrt-meter-icon nrt-meter-btn" });
+      micIcon.setAttr("role", "button");
+      micIcon.setAttr("tabindex", "0");
+      micIcon.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const s = this.plugin.session;
+        if (s && s.file.path === this.path) {
+          s.toggleMicMute();
+          this.updateMuteState();
+        }
+      });
+      micIcon.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          const s = this.plugin.session;
+          if (s && s.file.path === this.path) {
+            s.toggleMicMute();
+            this.updateMuteState();
+          }
+        }
+      });
+      this.micIconEl = micIcon;
+      this.micMeterEl = micMeter;
+      this.micFill = micMeter.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
+      if (session.hasSystem) {
+        const sysMeter = meters.createDiv({ cls: "nrt-meter" });
+        const sysIcon = sysMeter.createSpan({ cls: "nrt-meter-icon nrt-meter-btn" });
+        sysIcon.setAttr("role", "button");
+        sysIcon.setAttr("tabindex", "0");
+        sysIcon.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const s = this.plugin.session;
+          if (s && s.file.path === this.path) {
+            s.toggleSysMute();
+            this.updateMuteState();
+          }
+        });
+        sysIcon.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            const s = this.plugin.session;
+            if (s && s.file.path === this.path) {
+              s.toggleSysMute();
+              this.updateMuteState();
+            }
+          }
+        });
+        this.sysIconEl = sysIcon;
+        this.sysMeterEl = sysMeter;
+        this.sysFill = sysMeter.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
+      } else {
         const off = meters.createDiv({ cls: "nrt-meter nrt-meter-off", attr: { "aria-label": "System audio not captured" } });
         putIcon(off.createSpan({ cls: "nrt-meter-icon" }), "volume-x");
       }
+      this.updateMuteState(true);
       const btns = el.createDiv({ cls: "nrt-buttons" });
       this.button(btns, session.phase === "paused" ? "play" : "pause", session.phase === "paused" ? "Resume" : "Pause", "", () => this.plugin.togglePause());
       this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => void this.plugin.stopRecording(), "Stop");
-      this.button(btns, "chevron-down", "Summary template", "nrt-more", (e) => this.showTemplateMenu(e));
+      const moreBtn = btns.createEl("button", { cls: "nrt-btn nrt-more", attr: { "aria-label": "Summary template" } });
+      this.templateTextEl = moreBtn.createSpan({ text: session.activeTemplate.name });
+      putIcon(moreBtn.createSpan({ cls: "nrt-btn-icon" }), "chevron-down");
+      moreBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.showTemplateMenu(e);
+      });
       this.button(btns, "x", "Discard recording", "nrt-discard", () => void this.plugin.cancelRecording());
       this.draw();
       return;
@@ -2486,19 +2616,56 @@ var RecordingBar = class {
     var _a;
     const session = ((_a = this.plugin.session) == null ? void 0 : _a.file.path) === this.path ? this.plugin.session : null;
     if (session && this.timeEl) this.timeEl.setText(formatClock(session.elapsedMs));
+    if (session && this.templateTextEl) this.templateTextEl.setText(session.activeTemplate.name);
+    if (session) this.updateMuteState();
     const job = this.plugin.jobs.find((j) => j.file.path === this.path);
     if (job && this.progressText) {
       this.progressText.setText(job.phase === "transcribing" ? `${job.message} ${job.progress}%` : job.message);
       if (this.progressFill && job.phase === "transcribing") this.progressFill.setCssProps({ width: `${job.progress}%` });
     }
   }
+  updateMuteState(force = false) {
+    var _a;
+    const session = ((_a = this.plugin.session) == null ? void 0 : _a.file.path) === this.path ? this.plugin.session : null;
+    if (!session) return;
+    if (this.micIconEl && this.micMeterEl) {
+      const muted = session.isMicMuted;
+      if (force || this.micMutedState !== muted) {
+        this.micMutedState = muted;
+        this.micMeterEl.toggleClass("is-muted", muted);
+        this.micIconEl.toggleClass("is-muted", muted);
+        putIcon(this.micIconEl, muted ? "mic-off" : "mic");
+        this.micIconEl.setAttr("aria-label", muted ? "Unmute microphone" : "Mute microphone");
+        if (muted && this.micFill) {
+          this.micFill.setCssProps({ width: "0%" });
+        }
+      }
+    }
+    if (this.sysIconEl && this.sysMeterEl) {
+      const muted = session.isSysMuted;
+      if (force || this.sysMutedState !== muted) {
+        this.sysMutedState = muted;
+        this.sysMeterEl.toggleClass("is-muted", muted);
+        this.sysIconEl.toggleClass("is-muted", muted);
+        putIcon(this.sysIconEl, muted ? "volume-x" : "monitor-speaker");
+        this.sysIconEl.setAttr("aria-label", muted ? "Unmute system audio" : "Mute system audio");
+        if (muted && this.sysFill) {
+          this.sysFill.setCssProps({ width: "0%" });
+        }
+      }
+    }
+  }
   pushLevel(mic, sys) {
-    const level = Math.max(mic, sys);
+    var _a;
+    const session = ((_a = this.plugin.session) == null ? void 0 : _a.file.path) === this.path ? this.plugin.session : null;
+    const effectiveMic = (session == null ? void 0 : session.isMicMuted) ? 0 : mic;
+    const effectiveSys = (session == null ? void 0 : session.isSysMuted) ? 0 : sys;
+    const level = Math.max(effectiveMic, effectiveSys);
     this.history.copyWithin(0, 1);
     this.history[WAVE_BARS - 1] = Math.min(1, level);
     const curve = (v) => `${Math.round(Math.min(1, Math.pow(Math.max(0, v), 0.5)) * 100)}%`;
-    if (this.micFill) this.micFill.setCssProps({ width: curve(mic) });
-    if (this.sysFill) this.sysFill.setCssProps({ width: curve(sys) });
+    if (this.micFill) this.micFill.setCssProps({ width: (session == null ? void 0 : session.isMicMuted) ? "0%" : curve(mic) });
+    if (this.sysFill) this.sysFill.setCssProps({ width: (session == null ? void 0 : session.isSysMuted) ? "0%" : curve(sys) });
     if (!this.drawPending) {
       this.drawPending = true;
       window.requestAnimationFrame(() => {
@@ -2537,11 +2704,6 @@ var RecordingBar = class {
       g.fill();
     }
     g.globalAlpha = 1;
-  }
-  meter(parent, icon, label) {
-    const m = parent.createDiv({ cls: "nrt-meter", attr: { "aria-label": label } });
-    putIcon(m.createSpan({ cls: "nrt-meter-icon" }), icon);
-    return m.createDiv({ cls: "nrt-track" }).createDiv({ cls: "nrt-fill" });
   }
   button(parent, icon, label, cls, onClick, text) {
     const b = parent.createEl("button", { cls: `nrt-btn ${cls}`.trim(), attr: { "aria-label": label } });
@@ -3013,6 +3175,30 @@ var NoteRecorderPlugin = class extends import_obsidian8.Plugin {
       checkCallback: (checking) => {
         if (!this.session) return false;
         if (!checking) void this.cancelRecording();
+        return true;
+      }
+    });
+    this.addCommand({
+      id: "toggle-mic-mute",
+      name: "Mute / unmute microphone",
+      checkCallback: (checking) => {
+        if (!this.session || this.session.phase === "starting" || this.session.phase === "stopping") return false;
+        if (!checking) {
+          this.session.toggleMicMute();
+          this.ui.refresh();
+        }
+        return true;
+      }
+    });
+    this.addCommand({
+      id: "toggle-system-mute",
+      name: "Mute / unmute system audio",
+      checkCallback: (checking) => {
+        if (!this.session || !this.session.hasSystem || this.session.phase === "starting" || this.session.phase === "stopping") return false;
+        if (!checking) {
+          this.session.toggleSysMute();
+          this.ui.refresh();
+        }
         return true;
       }
     });

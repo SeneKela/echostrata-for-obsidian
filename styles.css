@@ -1,4 +1,4 @@
-/* ============ Note Recorder & Transcriber — Figma-style UI (v1.4.2) ============ */
+/* ============ Note Recorder & Transcriber — Figma-style UI (v1.5.0) ============ */
 
 body {
 	--nrt-font: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
@@ -144,7 +144,32 @@ body.theme-dark {
 .nrt-meter { display: flex; align-items: center; gap: 6px; color: var(--nrt-tb-muted); height: 12px; }
 .nrt-meter-off { color: rgba(255, 255, 255, 0.3); }
 .nrt-meter svg, .nrt-meter-icon svg { width: 12px; height: 12px; stroke-width: 2; }
-.nrt-meter-icon { display: inline-flex; }
+.nrt-meter-icon { display: inline-flex; align-items: center; justify-content: center; }
+.nrt-meter-btn {
+	cursor: pointer;
+	border-radius: 3px;
+	padding: 1px 2px;
+	margin: -1px -2px;
+	transition: color 0.1s ease, background-color 0.1s ease;
+}
+.nrt-meter-btn:hover {
+	color: var(--nrt-tb-text);
+	background-color: rgba(255, 255, 255, 0.12);
+}
+.nrt-meter-btn:focus-visible {
+	outline: 1px solid var(--nrt-blue);
+}
+.nrt-meter.is-muted .nrt-meter-icon,
+.nrt-meter-icon.is-muted {
+	color: var(--nrt-red);
+}
+.nrt-meter.is-muted .nrt-meter-btn:hover {
+	color: var(--nrt-red-hover);
+	background-color: rgba(242, 72, 34, 0.15);
+}
+.nrt-meter.is-muted .nrt-track {
+	opacity: 0.35;
+}
 .nrt-meter .nrt-track { width: 54px; height: 3px; background: var(--nrt-tb-track); }
 .nrt-meter .nrt-fill { transition: width 0.06s linear; background: var(--nrt-blue); }
 
@@ -173,6 +198,11 @@ body.theme-dark {
 .nrt-bar button.nrt-btn:not(.nrt-stop) { background-color: var(--nrt-grey-btn); }
 .nrt-bar button.nrt-btn:not(.nrt-stop):hover { background-color: var(--nrt-grey-btn-hover); }
 .nrt-bar button.nrt-btn:not(.nrt-stop):active { background-color: var(--nrt-grey-btn-active); }
+
+/* Template picker: blue */
+.nrt-bar button.nrt-btn.nrt-more { background-color: var(--nrt-blue); }
+.nrt-bar button.nrt-btn.nrt-more:hover { background-color: var(--nrt-blue-hover); }
+.nrt-bar button.nrt-btn.nrt-more:active { background-color: var(--nrt-blue-hover); }
 
 /* Stop: red */
 .nrt-bar button.nrt-btn.nrt-stop { background-color: var(--nrt-red); padding: 0 12px; }

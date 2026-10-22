@@ -61,6 +61,30 @@ export class RecordingSession {
 		return !!this.recorder?.hasSystem;
 	}
 
+	get isMicMuted(): boolean {
+		return this.recorder?.isMicMuted ?? false;
+	}
+
+	get isSysMuted(): boolean {
+		return this.recorder?.isSysMuted ?? false;
+	}
+
+	setMicMuted(muted: boolean): void {
+		this.recorder?.setMicMuted(muted);
+	}
+
+	toggleMicMute(): boolean {
+		return this.recorder?.toggleMicMute() ?? false;
+	}
+
+	setSysMuted(muted: boolean): void {
+		this.recorder?.setSysMuted(muted);
+	}
+
+	toggleSysMute(): boolean {
+		return this.recorder?.toggleSysMute() ?? false;
+	}
+
 	async start(): Promise<void> {
 		const { app, settings: s } = this.plugin;
 		await insertBlock(app, this.file, this.view, this.id, callout("danger", "🔴 Recording in progress…"), s.insertPosition);
