@@ -87,7 +87,7 @@ export class RecordingSession {
 
 	async start(): Promise<void> {
 		const { app, settings: s } = this.plugin;
-		await insertBlock(app, this.file, this.view, this.id, callout("danger", "🔴 Recording in progress…"), s.insertPosition);
+		await insertBlock(app, this.file, this.view, this.id, callout("danger", "Recording in progress…"), s.insertPosition);
 		try {
 			const system = await this.resolveSystem();
 			if (s.micDeviceId === "default" && (await defaultInputIsLoopback())) {
@@ -212,7 +212,7 @@ export class ProcessingJob {
 		try {
 			const audio = await this.saveAudio();
 			this.embed = "!" + app.fileManager.generateMarkdownLink(audio, this.file.path);
-			await updateBlock(app, this.file, this.id, `${this.embed}\n\n${callout("info", "⏳ Transcribing…")}`);
+			await updateBlock(app, this.file, this.id, `${this.embed}\n\n${callout("info", "Transcribing…")}`);
 
 			const bin = findWhisper(s.whisperPath);
 			const model = modelPathFor(this.plugin.modelsDir, s.whisperModel);
