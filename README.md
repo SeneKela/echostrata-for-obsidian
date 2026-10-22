@@ -30,7 +30,7 @@ Meeting tools upload your conversations to someone else's servers. Echostrata do
 - **Mic + system audio.** Captures your voice *and* what your Mac plays: Zoom, Teams, Meet, a browser tab, a video.
 - **Directly within Obsidian.** Click record in a note. The audio, transcript and summary land in that same note.
 - **Knows who spoke.** Your mic and the system audio are recorded on separate channels, so lines are labelled **Me** and **Others** without any speaker-recognition model.
-- **Summaries that fit the conversation.** A local model writes a title, summary and to-do checkboxes. Six [summary templates](#summary-templates) cover meetings, 1:1s, client calls, lectures, user interviews and voice memos.
+- **Summaries that fit the conversation.** A local model writes a title, summary and to-do checkboxes. Six built-in [summary templates](#summary-templates) cover meetings, 1:1s, client calls, lectures, user interviews and voice memos — or define your own custom templates with a name, purpose and prompt.
 - **Nothing leaves your Mac.** Transcription runs on [whisper.cpp](https://github.com/ggerganov/whisper.cpp), summaries on [Ollama](https://ollama.com). No account, no API key, no subscription, no cloud.
 
 ## What you get in your note
@@ -62,11 +62,12 @@ The transcript is folded by default so the summary stays on top.
 | | |
 |---|---|
 | **One-click recording** | A mic button in the note header turns into a red **■ 03:12** timer while recording. The ribbon icon, a command and the status bar also start and stop recording. |
-| **Floating recording bar** | Live waveform, separate Mic and System level meters, plus **Pause**, **Stop** and **Discard** buttons. After you stop, it shows transcription progress. |
+| **Floating recording bar** | Live waveform, separate Mic and System level meters (click to mute/unmute mid-recording), plus **Pause**, **Stop** and **Discard** buttons. After you stop, it shows transcription progress. |
 | **Live note updates** | A "Recording…" placeholder appears where your cursor is. It becomes "Transcribing…", then the final result. |
 | **Built-in system audio** | Uses Apple's ScreenCaptureKit. No virtual audio driver, no Multi-Output Device, and your volume keys keep working. |
 | **Speaker labels** | Me / Others, with names you can change. Silent channels are skipped automatically. |
 | **Local summaries** | Choose any model installed in Ollama from a dropdown. |
+| **Custom templates** | Write your own summary template — give it a name, a "use for" description and a prompt. Custom templates appear alongside built-in ones in the template picker. |
 | **Guided setup** | A setup assistant checks and installs everything without opening Terminal. |
 | **Long sessions** | Audio is written to disk as it records, and your Mac is kept awake while recording and transcribing. |
 | **Clean output** | Whisper artefacts such as `[BLANK_AUDIO]`, `(music)` and repeated lines are filtered out. |
@@ -126,6 +127,8 @@ Processing time is roughly **1 minute per 20 minutes of audio**, plus a few seco
 | Pause / resume recording |
 | Discard current recording |
 | Record with template… |
+| Mute / unmute microphone |
+| Mute / unmute system audio |
 | Open setup assistant |
 
 Assign hotkeys in **Settings → Hotkeys → search "Echostrata"**.
@@ -140,6 +143,9 @@ Assign hotkeys in **Settings → Hotkeys → search "Echostrata"**.
 | **Lecture & learning** | Courses, talks, webinars, tutorials | Outline, concepts, examples, takeaways, references, review questions |
 | **User interview** | User research, usability tests | Profile, goals, pains, insights with evidence, opportunities, quotes |
 | **Voice memo** | Thinking aloud, ideas, drafting | Core idea, ideas, structure, tasks, open questions, tags |
+| **Custom** | Whatever you define | Whatever your prompt asks for |
+
+Custom templates are created in **Settings → Summary → Custom templates → Add template**. Give it a name, an optional "use for" description, and a prompt. The prompt receives the transcript and must ask the model to return structured JSON — the schema is appended automatically. Custom templates appear in the **Record with template…** picker and the per-note frontmatter alongside the built-in ones.
 
 The template is chosen in this order, most specific first:
 
@@ -150,7 +156,7 @@ The template is chosen in this order, most specific first:
    echostrata-template: client-call
    ---
    ```
-   Valid values: `meeting`, `one-on-one`, `client-call`, `lecture`, `user-interview`, `voice-memo`.
+   Valid values: `meeting`, `one-on-one`, `client-call`, `lecture`, `user-interview`, `voice-memo`, plus the slugified ID of any custom template you've created (e.g. `custom-weekly-standup`).
 3. **Settings → Summary template** (default: Meeting).
 
 `qwen3:4b` handles every template. `qwen3:8b` gives noticeably better Client call and User interview results. If the model returns invalid JSON, Echostrata retries once. If that fails too, the transcript is still written, without a summary.
@@ -176,6 +182,7 @@ The template is chosen in this order, most specific first:
 | | CPU threads | Automatic |
 | **Summary** | Generate a summary | On |
 | | Summary template | Meeting |
+| | Custom templates | Add / edit / delete your own templates |
 | | Ollama URL | `http://127.0.0.1:11434` |
 | | Ollama model | Dropdown of your installed models |
 | **Other** | Keep Mac awake | On |
@@ -322,7 +329,7 @@ styles.css          Figma-style UI
 
 ## Roadmap
 
-- [ ] Custom summary prompts and templates
+- [x] Custom summary prompts and templates
 - [ ] Live transcript while recording
 
 ## Credits
