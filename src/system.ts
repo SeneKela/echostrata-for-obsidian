@@ -33,16 +33,17 @@ export const findWhisper = (override?: string) => findExecutable(["whisper-cli",
 /** Opens the system file picker and resolves with the chosen file's absolute path (null if cancelled). */
 export function pickFile(): Promise<string | null> {
 	return new Promise((resolve) => {
-		const input = document.createElement("input");
+		const input = createEl("input");
 		input.type = "file";
 		input.addEventListener("change", () => {
-			const file = input.files?.[0] as (File & { path?: string }) | undefined;
+			const file: (File & { path?: string }) | undefined = input.files?.[0];
 			if (!file) return resolve(null);
 			let p = file.path; // Electron < 32
 			if (!p) {
 				try {
 					// Newer Electron removed File.path
-					p = (window as any).require("electron").webUtils.getPathForFile(file);
+					const req = (window as unknown as { require: (id: string) => { webUtils: { getPathForFile(f: File): string } } }).require;
+					p = req("electron").webUtils.getPathForFile(file);
 				} catch {
 					/* unavailable */
 				}
@@ -164,7 +165,7 @@ export function downloadFile(
 }
 
 /** POSTs JSON and invokes `onJson` for each newline-delimited JSON object in the response (Ollama streaming). */
-export function postNdjson(url: string, body: unknown, onJson: (obj: any) => void): Promise<void> {
+export function postNdjson<T = Record<string, unknown>>(url: string, body: unknown, onJson: (obj: T) => void): Promise<void> {
 	return new Promise((resolve, reject) => {
 		const u = new URL(url);
 		const mod = u.protocol === "https:" ? https : http;
@@ -182,7 +183,7 @@ export function postNdjson(url: string, body: unknown, onJson: (obj: any) => voi
 						buf = buf.slice(i + 1);
 						if (line) {
 							try {
-								onJson(JSON.parse(line));
+								onJson(JSON.parse(line) as T);
 							} catch {
 								/* partial line */
 							}

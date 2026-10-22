@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-macOS%2013%2B-232327">
-  <img alt="Obsidian" src="https://img.shields.io/badge/Obsidian-1.5%2B-232327">
+  <img alt="Obsidian" src="https://img.shields.io/badge/Obsidian-1.5.7%2B-232327">
   <img alt="Desktop only" src="https://img.shields.io/badge/desktop-only-232327">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-232327">
 </p>
@@ -74,7 +74,7 @@ The transcript is folded by default so the summary stays on top.
 ## Requirements
 
 - **macOS 13 Ventura or later** for built-in system-audio capture. Older macOS versions can use [BlackHole](https://existential.audio/blackhole/) instead.
-- **Obsidian 1.5+**, desktop.
+- **Obsidian 1.5.7+**, desktop.
 - **[Homebrew](https://brew.sh)**, used to install whisper.cpp.
 - **Xcode Command Line Tools**, used to build the small system-audio helper once. They're already installed if you have Homebrew.
 - **[Ollama](https://ollama.com/download)**, *optional*, for summaries.
@@ -208,6 +208,44 @@ Echostrata is built so that **everything that should stay private, stays private
 After setup, Echostrata works fully offline.
 
 > If you point **Ollama URL** to a remote server, transcripts will be sent there for summarising. Keep the default `127.0.0.1` to stay fully local.
+
+## System access disclosure
+
+Echostrata is **desktop-only** and, to do its job locally, goes beyond Obsidian's vault API. It uses two powerful Node.js/Electron capabilities that Obsidian's plugin review flags. Here is exactly what they are used for, and nothing else:
+
+### Filesystem access (Node.js `fs`, `os`, `path`)
+
+| What | Where | Why |
+|---|---|---|
+| Writes temporary WAV files (mic, system, mix) | System temp folder, `obsidian-note-recorder/<id>/` | Streams audio to disk so long recordings don't fill memory. Deleted when processing finishes. |
+| Writes the helper's Swift source | System temp folder, `nrt-system-audio-v*.swift` | Input for the one-time `swiftc` build below. |
+| Reads and writes the plugin folder | `<vault>/.obsidian/plugins/echostrata/` | Stores the downloaded speech model (`models/`) and the compiled system-audio helper (`bin/`). |
+| Reads the file you choose in the **Locate on this Mac…** picker | A path you pick | Lets you point to an existing `whisper-cli` binary. |
+
+The recording itself (`.m4a`) and the note text are written through Obsidian's **vault API**, not `fs`.
+
+### Shell execution (Node.js `child_process`)
+
+Programs are started directly with an argument list, never through a shell string, and none of this runs until you start recording, transcribing or setup. The only program you can choose yourself is the whisper.cpp binary path.
+
+| Command | When | Purpose |
+|---|---|---|
+| `whisper-cli` / `whisper-cpp` (auto-detected, or the path you set in **whisper.cpp binary**) | After you stop a recording | Local transcription. |
+| `brew install whisper-cpp` | Only when you click **Install** in setup | Installs the speech engine. |
+| `xcode-select -p` / `--install` | Setup assistant | Checks for, or installs, the Command Line Tools. |
+| `swiftc` | Only when you click **Prepare** in setup | Compiles the bundled Swift source into the ScreenCaptureKit helper on your Mac. |
+| Compiled system-audio helper | While recording with built-in capture | Streams system audio to the plugin over a pipe. |
+| `caffeinate -i -m` | While recording or transcribing (if **Keep Mac awake** is on) | Prevents idle sleep. |
+| `open` / `open -a` | Setup assistant buttons | Opens System Settings or Audio MIDI Setup. |
+| `osascript` | Only when you click **Install BlackHole** | Opens Terminal with `brew install --cask blackhole-2ch`. |
+
+### Network
+
+Only the one-time downloads listed under [Privacy](#privacy), plus requests to the **Ollama URL** you configure (default `127.0.0.1`).
+
+### Release integrity
+
+Release assets (`main.js`, `manifest.json`, `styles.css`) are built by GitHub Actions from a tagged commit with `npm ci`, and carry [GitHub build-provenance attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations). Verify a download with `gh attestation verify main.js --repo SeneKela/echostrata-for-obsidian`.
 
 ## How it works
 

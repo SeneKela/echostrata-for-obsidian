@@ -32,14 +32,15 @@ export async function listOllamaModels(baseUrl: string): Promise<OllamaModel[] |
 	try {
 		const res = await requestUrl({ url: `${baseUrl.replace(/\/$/, "")}/api/tags`, throw: false });
 		if (res.status !== 200) return null;
-		return (res.json.models ?? [])
-			.map((m: any) => ({
+		const json = res.json as { models?: Array<{ name?: string; model?: string; size?: number; details?: { parameter_size?: string } }> };
+		return (json.models ?? [])
+			.map((m): OllamaModel => ({
 				name: String(m.name ?? m.model),
 				size: Number(m.size ?? 0),
 				parameterSize: m.details?.parameter_size ? String(m.details.parameter_size) : undefined,
 			}))
-			.filter((m: OllamaModel) => !!m.name)
-			.sort((a: OllamaModel, b: OllamaModel) => a.name.localeCompare(b.name));
+			.filter((m) => !!m.name)
+			.sort((a, b) => a.name.localeCompare(b.name));
 	} catch {
 		return null;
 	}
@@ -78,10 +79,10 @@ async function chat(baseUrl: string, model: string, system: string, user: string
 		throw: false,
 	});
 	if (res.status !== 200) throw new Error(`Ollama returned HTTP ${res.status}`);
-	const raw = String(res.json.message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-	const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1));
+	const raw = String((res.json as { message?: { content?: string } }).message?.content ?? "").replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+	const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)) as unknown;
 	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Model did not return a JSON object");
-	return parsed;
+	return parsed as Record<string, unknown>;
 }
 
 /**

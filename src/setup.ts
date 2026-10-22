@@ -203,11 +203,13 @@ export class SetupModal extends Modal {
 				placeholder: current ? undefined : "Choose a model…",
 				options: models.map((m) => ({ value: m.name, label: modelLabel(m) })),
 				value: current ?? "",
-				onChange: async (v) => {
-					s.ollamaModel = v;
-					await this.plugin.saveSettings();
-					this.rows.ollama = await this.ollamaRow();
-					this.draw();
+				onChange: (v) => {
+					void (async () => {
+						s.ollamaModel = v;
+						await this.plugin.saveSettings();
+						this.rows.ollama = await this.ollamaRow();
+						this.draw();
+					})();
 				},
 			},
 			actions: downloads,
@@ -278,7 +280,7 @@ export class SetupModal extends Modal {
 		this.rows.ollama = row;
 		this.draw();
 		try {
-			await postNdjson(`${this.plugin.settings.ollamaUrl.replace(/\/$/, "")}/api/pull`, { model: name, stream: true }, (o) => {
+			await postNdjson<{ total?: number; completed?: number; status?: string }>(`${this.plugin.settings.ollamaUrl.replace(/\/$/, "")}/api/pull`, { model: name, stream: true }, (o) => {
 				if (o.total && o.completed) row.progress = o.completed / o.total;
 				row.log = o.status ?? "";
 				this.drawThrottled();
@@ -305,7 +307,7 @@ export class SetupModal extends Modal {
 		// The content area scrolls; keep its position and height stable while the list is rebuilt.
 		const scroller = this.contentEl;
 		const top = scroller.scrollTop;
-		this.listEl.style.minHeight = `${this.listEl.offsetHeight}px`;
+		this.listEl.setCssProps({ "min-height": `${this.listEl.offsetHeight}px` });
 		this.listEl.empty();
 		for (const row of Object.values(this.rows)) {
 			const r = this.listEl.createDiv({ cls: `nrt-setup-row is-${row.status}` });
@@ -336,7 +338,8 @@ export class SetupModal extends Modal {
 
 			if (row.status === "working") {
 				const track = body.createDiv({ cls: "nrt-track" + (row.progress == null ? " nrt-indeterminate" : "") });
-				track.createDiv({ cls: "nrt-fill" }).style.width = `${Math.round((row.progress ?? 1) * 100)}%`;
+				const fill = track.createDiv({ cls: "nrt-fill" });
+				if (row.progress != null) fill.setCssProps({ width: `${Math.round(row.progress * 100)}%` });
 			}
 			if (row.log) body.createDiv({ cls: "nrt-setup-log", text: row.log });
 			if (row.actions?.length) {
@@ -345,7 +348,7 @@ export class SetupModal extends Modal {
 					a.createEl("button", { text: act.label, cls: act.cta ? "mod-cta" : "" }).addEventListener("click", act.run));
 			}
 		}
-		this.listEl.style.minHeight = "";
+		this.listEl.setCssProps({ "min-height": "" });
 		scroller.scrollTop = top;
 	}
 

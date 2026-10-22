@@ -1,6 +1,6 @@
 {
 	"compilerOptions": {
-		"baseUrl": ".", "target": "ES2018", "module": "ESNext", "moduleResolution": "node",
+		"baseUrl": ".", "target": "ES2018", "module": "ESNext", "moduleResolution": "node", "types": ["node"],
 		"lib": ["DOM", "ES2020"], "strict": true, "noImplicitAny": true, "useDefineForClassFields": false,
 		"isolatedModules": true, "allowSyntheticDefaultImports": true, "inlineSourceMap": true, "inlineSources": true
 	},

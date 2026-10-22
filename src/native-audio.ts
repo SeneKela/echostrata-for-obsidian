@@ -255,13 +255,13 @@ export class NativeSystemAudio {
 			const done = (err: Error | null) => {
 				if (settled) return;
 				settled = true;
-				clearTimeout(timer);
+				window.clearTimeout(timer);
 				if (err) {
 					this.stop();
 					reject(err);
 				} else resolve(this.rate);
 			};
-			const timer = setTimeout(
+			const timer = window.setTimeout(
 				() => done(new NativeAudioError(-1, "System-audio capture did not start (macOS permission prompt pending?). " + PERMISSION_HELP)),
 				timeoutMs,
 			);
@@ -316,7 +316,7 @@ export class NativeSystemAudio {
 		} catch {
 			/* ignore */
 		}
-		setTimeout(() => {
+		window.setTimeout(() => {
 			if (p.exitCode === null) p.kill("SIGKILL");
 		}, 2500);
 	}
@@ -333,7 +333,7 @@ export async function testNative(bin: string, ms = 4000): Promise<number> {
 		}
 	};
 	await cap.start();
-	await new Promise((r) => setTimeout(r, ms));
+	await new Promise((r) => window.setTimeout(r, ms));
 	cap.stop();
 	return peak;
 }

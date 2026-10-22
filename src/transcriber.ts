@@ -34,7 +34,7 @@ export interface WhisperOptions {
 	signal?: AbortSignal;
 }
 
-const NOISE_RE = /^[\s.]*([\[(（【♪*].*[\])）】♪*])?[\s.]*$/;
+const NOISE_RE = /^[\s.]*([[(（【♪*].*[\])）】♪*])?[\s.]*$/;
 
 /** Runs whisper.cpp on a 16 kHz mono WAV and returns timestamped segments. */
 export async function transcribeWav(bin: string, modelPath: string, wav: string, o: WhisperOptions): Promise<Segment[]> {

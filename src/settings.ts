@@ -111,7 +111,7 @@ async function testSystemAudio(plugin: NoteRecorderPlugin): Promise<string> {
 		while (Date.now() < end) {
 			an.getFloatTimeDomainData(buf);
 			for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
-			await new Promise((r) => setTimeout(r, 40));
+			await new Promise((r) => window.setTimeout(r, 40));
 		}
 		stream.getTracks().forEach((t) => t.stop());
 		await ctx.close();
@@ -157,9 +157,9 @@ export class RecorderSettingTab extends PluginSettingTab {
 			.addDropdown((d) => {
 				d.addOption("default", "System default");
 				real.filter((x) => !LOOPBACK_RE.test(x.label)).forEach((x) => d.addOption(x.deviceId, x.label || "Microphone"));
-				d.setValue(s.micDeviceId).onChange(async (v) => {
+				d.setValue(s.micDeviceId).onChange((v) => {
 					s.micDeviceId = v;
-					await save();
+					void save();
 				});
 			});
 
@@ -171,25 +171,27 @@ export class RecorderSettingTab extends PluginSettingTab {
 				d.addOption("auto", "BlackHole / Loopback device (auto-detect)");
 				d.addOption("none", "Off — microphone only");
 				real.forEach((x) => d.addOption(x.deviceId, x.label || "Input"));
-				d.setValue(s.systemDeviceId).onChange(async (v) => {
+				d.setValue(s.systemDeviceId).onChange((v) => {
 					s.systemDeviceId = v;
-					await save();
+					void save();
 				});
 			});
 
 		new Setting(containerEl)
 			.setName("Test system audio")
 			.setDesc("Play something (e.g. a YouTube video), then click Test. Listens for 4 seconds.")
-			.addButton((b) => b.setButtonText("Test").onClick(async () => {
-				b.setDisabled(true).setButtonText("Listening…");
-				try {
-					new Notice(await testSystemAudio(this.plugin), 10000);
-				} catch (e) {
-					new Notice(`System audio test failed: ${(e as Error).message}`, 12000);
-					if (e instanceof NativeAudioError && e.isPermission) openScreenRecordingSettings();
-				} finally {
-					b.setDisabled(false).setButtonText("Test");
-				}
+			.addButton((b) => b.setButtonText("Test").onClick(() => {
+				void (async () => {
+					b.setDisabled(true).setButtonText("Listening…");
+					try {
+						new Notice(await testSystemAudio(this.plugin), 10000);
+					} catch (e) {
+						new Notice(`System audio test failed: ${(e as Error).message}`, 12000);
+						if (e instanceof NativeAudioError && e.isPermission) openScreenRecordingSettings();
+					} finally {
+						b.setDisabled(false).setButtonText("Test");
+					}
+				})();
 			}));
 
 		new Setting(containerEl)
@@ -202,14 +204,14 @@ export class RecorderSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Microphone level")
-			.addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.micGain).setDynamicTooltip().onChange(async (v) => {
+			.addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.micGain).onChange(async (v) => {
 				s.micGain = v;
 				await save();
 			}));
 
 		new Setting(containerEl)
 			.setName("System audio level")
-			.addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.systemGain).setDynamicTooltip().onChange(async (v) => {
+			.addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.systemGain).onChange(async (v) => {
 				s.systemGain = v;
 				await save();
 			}));
@@ -242,17 +244,17 @@ export class RecorderSettingTab extends PluginSettingTab {
 			.setDesc("Downloaded once into the plugin folder. Runs offline on your Mac.")
 			.addDropdown((d) => {
 				WHISPER_MODELS.forEach((m) => d.addOption(m.id, `${m.label} (${m.size})`));
-				d.setValue(s.whisperModel).onChange(async (v) => {
+				d.setValue(s.whisperModel).onChange((v) => {
 					s.whisperModel = v;
-					await save();
+					void save();
 				});
 			});
 
 		new Setting(containerEl).setName("Language").addDropdown((d) => {
 			Object.entries(LANGUAGES).forEach(([k, v]) => d.addOption(k, v));
-			d.setValue(s.language).onChange(async (v) => {
+			d.setValue(s.language).onChange((v) => {
 				s.language = v;
-				await save();
+				void save();
 			});
 		});
 
@@ -321,10 +323,10 @@ export class RecorderSettingTab extends PluginSettingTab {
 		templateSetting.addDropdown((d) => {
 			const templates = allTemplates();
 			templates.forEach((t) => d.addOption(t.id, t.name));
-			d.setValue(findTemplate(s.summaryTemplate)?.id ?? templates[0].id).onChange(async (v) => {
+			d.setValue(findTemplate(s.summaryTemplate)?.id ?? templates[0].id).onChange((v) => {
 				s.summaryTemplate = v;
 				describeTemplate();
-				await save();
+				void save();
 			});
 		});
 		describeTemplate();
@@ -352,11 +354,13 @@ export class RecorderSettingTab extends PluginSettingTab {
 						this.display();
 					}).open();
 				}))
-				.addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(async () => {
-					s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
-					if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
-					await this.saveTemplates();
-					this.display();
+				.addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(() => {
+					void (async () => {
+						s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
+						if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
+						await this.saveTemplates();
+						this.display();
+					})();
 				}));
 		}
 
@@ -412,10 +416,9 @@ export class RecorderSettingTab extends PluginSettingTab {
 				.addDropdown((d) => {
 					if (!current) d.addOption(s.ollamaModel, `${s.ollamaModel} — not installed`);
 					models.forEach((m) => d.addOption(m.name, modelLabel(m)));
-					d.setValue(current ?? s.ollamaModel).onChange(async (v) => {
+					d.setValue(current ?? s.ollamaModel).onChange((v) => {
 						s.ollamaModel = v;
-						await save();
-						void this.renderOllamaModel();
+						void save().then(() => this.renderOllamaModel());
 					});
 				});
 			if (current && current !== s.ollamaModel) {

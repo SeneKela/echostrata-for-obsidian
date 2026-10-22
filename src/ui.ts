@@ -53,7 +53,7 @@ export class NoteUI {
 			const wants = !!path && (session?.file.path === path || !!job);
 			let bar = this.bars.get(v);
 			if (bar && (!wants || bar.path !== path)) { bar.destroy(); this.bars.delete(v); bar = undefined; }
-			if (wants && !bar) { bar = new RecordingBar(v.contentEl, this.plugin, path!); this.bars.set(v, bar); }
+			if (wants && !bar) { bar = new RecordingBar(v.contentEl, this.plugin, path); this.bars.set(v, bar); }
 			bar?.render();
 		}
 
@@ -232,9 +232,9 @@ class RecordingBar {
 			const btns = el.createDiv({ cls: "nrt-buttons" });
 			this.button(btns, session.phase === "paused" ? "play" : "pause", session.phase === "paused" ? "Resume" : "Pause", "", () =>
 				this.plugin.togglePause());
-			this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => this.plugin.stopRecording(), "Stop");
+			this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => void this.plugin.stopRecording(), "Stop");
 			this.button(btns, "chevron-down", "Summary template", "nrt-more", (e) => this.showTemplateMenu(e));
-			this.button(btns, "x", "Discard recording", "nrt-discard", () => this.plugin.cancelRecording());
+			this.button(btns, "x", "Discard recording", "nrt-discard", () => void this.plugin.cancelRecording());
 			this.draw();
 			return;
 		}
@@ -260,7 +260,7 @@ class RecordingBar {
 		const job = this.plugin.jobs.find((j) => j.file.path === this.path);
 		if (job && this.progressText) {
 			this.progressText.setText(job.phase === "transcribing" ? `${job.message} ${job.progress}%` : job.message);
-			if (this.progressFill) this.progressFill.style.width = `${job.phase === "transcribing" ? job.progress : 100}%`;
+			if (this.progressFill && job.phase === "transcribing") this.progressFill.setCssProps({ width: `${job.progress}%` });
 		}
 	}
 
@@ -269,8 +269,8 @@ class RecordingBar {
 		this.history.copyWithin(0, 1);
 		this.history[WAVE_BARS - 1] = Math.min(1, level);
 		const curve = (v: number) => `${Math.round(Math.min(1, Math.pow(Math.max(0, v), 0.5)) * 100)}%`;
-		if (this.micFill) this.micFill.style.width = curve(mic);
-		if (this.sysFill) this.sysFill.style.width = curve(sys);
+		if (this.micFill) this.micFill.setCssProps({ width: curve(mic) });
+		if (this.sysFill) this.sysFill.setCssProps({ width: curve(sys) });
 		if (!this.drawPending) {
 			this.drawPending = true;
 			window.requestAnimationFrame(() => {

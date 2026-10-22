@@ -101,7 +101,7 @@ function findExecutable(names, override) {
 var findWhisper = (override) => findExecutable(["whisper-cli", "whisper-cpp"], override);
 function pickFile() {
   return new Promise((resolve) => {
-    const input = document.createElement("input");
+    const input = createEl("input");
     input.type = "file";
     input.addEventListener("change", () => {
       var _a;
@@ -110,7 +110,8 @@ function pickFile() {
       let p = file.path;
       if (!p) {
         try {
-          p = window.require("electron").webUtils.getPathForFile(file);
+          const req = window.require;
+          p = req("electron").webUtils.getPathForFile(file);
         } catch (e) {
         }
       }
@@ -257,7 +258,7 @@ var getModel = (id) => {
   var _a;
   return (_a = WHISPER_MODELS.find((m) => m.id === id)) != null ? _a : WHISPER_MODELS[2];
 };
-var NOISE_RE = /^[\s.]*([\[(（【♪*].*[\])）】♪*])?[\s.]*$/;
+var NOISE_RE = /^[\s.]*([[(（【♪*].*[\])）】♪*])?[\s.]*$/;
 async function transcribeWav(bin, modelPath, wav, o) {
   var _a, _b, _c, _d, _e, _f;
   const outBase = wav.replace(/\.wav$/, "");
@@ -797,7 +798,8 @@ async function listOllamaModels(baseUrl) {
   try {
     const res = await (0, import_obsidian.requestUrl)({ url: `${baseUrl.replace(/\/$/, "")}/api/tags`, throw: false });
     if (res.status !== 200) return null;
-    return ((_a = res.json.models) != null ? _a : []).map((m) => {
+    const json = res.json;
+    return ((_a = json.models) != null ? _a : []).map((m) => {
       var _a2, _b, _c;
       return {
         name: String((_a2 = m.name) != null ? _a2 : m.model),
@@ -1154,13 +1156,13 @@ var NativeSystemAudio = class {
       const done = (err) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        window.clearTimeout(timer);
         if (err) {
           this.stop();
           reject(err);
         } else resolve(this.rate);
       };
-      const timer = setTimeout(
+      const timer = window.setTimeout(
         () => done(new NativeAudioError(-1, "System-audio capture did not start (macOS permission prompt pending?). " + PERMISSION_HELP)),
         timeoutMs
       );
@@ -1212,7 +1214,7 @@ var NativeSystemAudio = class {
       (_a = p.stdin) == null ? void 0 : _a.end();
     } catch (e) {
     }
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (p.exitCode === null) p.kill("SIGKILL");
     }, 2500);
   }
@@ -1227,7 +1229,7 @@ async function testNative(bin, ms = 4e3) {
     }
   };
   await cap.start();
-  await new Promise((r) => setTimeout(r, ms));
+  await new Promise((r) => window.setTimeout(r, ms));
   cap.stop();
   return peak2;
 }
@@ -1303,7 +1305,7 @@ async function testSystemAudio(plugin) {
     while (Date.now() < end) {
       an.getFloatTimeDomainData(buf);
       for (let i = 0; i < buf.length; i++) peak2 = Math.max(peak2, Math.abs(buf[i]));
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => window.setTimeout(r, 40));
     }
     stream.getTracks().forEach((t) => t.stop());
     await ctx.close();
@@ -1334,9 +1336,9 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName("Microphone").setDesc("Your voice. Avoid choosing a loopback device here.").addDropdown((d) => {
       d.addOption("default", "System default");
       real.filter((x) => !LOOPBACK_RE.test(x.label)).forEach((x) => d.addOption(x.deviceId, x.label || "Microphone"));
-      d.setValue(s.micDeviceId).onChange(async (v) => {
+      d.setValue(s.micDeviceId).onChange((v) => {
         s.micDeviceId = v;
-        await save();
+        void save();
       });
     });
     new import_obsidian3.Setting(containerEl).setName("System audio (Mac)").setDesc("What your Mac plays (Zoom, Teams, browser\u2026). Built-in capture needs no driver; macOS asks once for Screen & System Audio Recording permission.").addDropdown((d) => {
@@ -1344,31 +1346,33 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
       d.addOption("auto", "BlackHole / Loopback device (auto-detect)");
       d.addOption("none", "Off \u2014 microphone only");
       real.forEach((x) => d.addOption(x.deviceId, x.label || "Input"));
-      d.setValue(s.systemDeviceId).onChange(async (v) => {
+      d.setValue(s.systemDeviceId).onChange((v) => {
         s.systemDeviceId = v;
-        await save();
+        void save();
       });
     });
-    new import_obsidian3.Setting(containerEl).setName("Test system audio").setDesc("Play something (e.g. a YouTube video), then click Test. Listens for 4 seconds.").addButton((b) => b.setButtonText("Test").onClick(async () => {
-      b.setDisabled(true).setButtonText("Listening\u2026");
-      try {
-        new import_obsidian3.Notice(await testSystemAudio(this.plugin), 1e4);
-      } catch (e) {
-        new import_obsidian3.Notice(`System audio test failed: ${e.message}`, 12e3);
-        if (e instanceof NativeAudioError && e.isPermission) openScreenRecordingSettings();
-      } finally {
-        b.setDisabled(false).setButtonText("Test");
-      }
+    new import_obsidian3.Setting(containerEl).setName("Test system audio").setDesc("Play something (e.g. a YouTube video), then click Test. Listens for 4 seconds.").addButton((b) => b.setButtonText("Test").onClick(() => {
+      void (async () => {
+        b.setDisabled(true).setButtonText("Listening\u2026");
+        try {
+          new import_obsidian3.Notice(await testSystemAudio(this.plugin), 1e4);
+        } catch (e) {
+          new import_obsidian3.Notice(`System audio test failed: ${e.message}`, 12e3);
+          if (e instanceof NativeAudioError && e.isPermission) openScreenRecordingSettings();
+        } finally {
+          b.setDisabled(false).setButtonText("Test");
+        }
+      })();
     }));
     new import_obsidian3.Setting(containerEl).setName("Microphone echo cancellation").setDesc("Keep on when using speakers. Headphones give the cleanest speaker separation.").addToggle((t) => t.setValue(s.micEchoCancellation).onChange(async (v) => {
       s.micEchoCancellation = v;
       await save();
     }));
-    new import_obsidian3.Setting(containerEl).setName("Microphone level").addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.micGain).setDynamicTooltip().onChange(async (v) => {
+    new import_obsidian3.Setting(containerEl).setName("Microphone level").addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.micGain).onChange(async (v) => {
       s.micGain = v;
       await save();
     }));
-    new import_obsidian3.Setting(containerEl).setName("System audio level").addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.systemGain).setDynamicTooltip().onChange(async (v) => {
+    new import_obsidian3.Setting(containerEl).setName("System audio level").addSlider((sl) => sl.setLimits(0.2, 3, 0.1).setValue(s.systemGain).onChange(async (v) => {
       s.systemGain = v;
       await save();
     }));
@@ -1384,16 +1388,16 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
     new import_obsidian3.Setting(containerEl).setName("Transcription").setHeading();
     new import_obsidian3.Setting(containerEl).setName("Speech model").setDesc("Downloaded once into the plugin folder. Runs offline on your Mac.").addDropdown((d) => {
       WHISPER_MODELS.forEach((m) => d.addOption(m.id, `${m.label} (${m.size})`));
-      d.setValue(s.whisperModel).onChange(async (v) => {
+      d.setValue(s.whisperModel).onChange((v) => {
         s.whisperModel = v;
-        await save();
+        void save();
       });
     });
     new import_obsidian3.Setting(containerEl).setName("Language").addDropdown((d) => {
       Object.entries(LANGUAGES).forEach(([k, v]) => d.addOption(k, v));
-      d.setValue(s.language).onChange(async (v) => {
+      d.setValue(s.language).onChange((v) => {
         s.language = v;
-        await save();
+        void save();
       });
     });
     new import_obsidian3.Setting(containerEl).setName("Label speakers").setDesc("Transcribe microphone and system audio separately and label who spoke.").addToggle((t) => t.setValue(s.labelSpeakers).onChange(async (v) => {
@@ -1439,10 +1443,10 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
       var _a, _b;
       const templates = allTemplates();
       templates.forEach((t) => d.addOption(t.id, t.name));
-      d.setValue((_b = (_a = findTemplate(s.summaryTemplate)) == null ? void 0 : _a.id) != null ? _b : templates[0].id).onChange(async (v) => {
+      d.setValue((_b = (_a = findTemplate(s.summaryTemplate)) == null ? void 0 : _a.id) != null ? _b : templates[0].id).onChange((v) => {
         s.summaryTemplate = v;
         describeTemplate();
-        await save();
+        void save();
       });
     });
     describeTemplate();
@@ -1461,11 +1465,13 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
           await this.saveTemplates();
           this.display();
         }).open();
-      })).addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(async () => {
-        s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
-        if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
-        await this.saveTemplates();
-        this.display();
+      })).addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(() => {
+        void (async () => {
+          s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
+          if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
+          await this.saveTemplates();
+          this.display();
+        })();
       }));
     }
     new import_obsidian3.Setting(containerEl).setName("Ollama URL").setDesc("The model list below refreshes when you leave this field.").addText((t) => {
@@ -1504,10 +1510,9 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
       setting.setDesc(`${models.length} model${models.length > 1 ? "s" : ""} installed in Ollama.`).addDropdown((d) => {
         if (!current) d.addOption(s.ollamaModel, `${s.ollamaModel} \u2014 not installed`);
         models.forEach((m) => d.addOption(m.name, modelLabel(m)));
-        d.setValue(current != null ? current : s.ollamaModel).onChange(async (v) => {
+        d.setValue(current != null ? current : s.ollamaModel).onChange((v) => {
           s.ollamaModel = v;
-          await save();
-          void this.renderOllamaModel();
+          void save().then(() => this.renderOllamaModel());
         });
       });
       if (current && current !== s.ollamaModel) {
@@ -2443,9 +2448,9 @@ var RecordingBar = class {
       }
       const btns = el.createDiv({ cls: "nrt-buttons" });
       this.button(btns, session.phase === "paused" ? "play" : "pause", session.phase === "paused" ? "Resume" : "Pause", "", () => this.plugin.togglePause());
-      this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => this.plugin.stopRecording(), "Stop");
+      this.button(btns, "square", "Stop & transcribe", "nrt-stop", () => void this.plugin.stopRecording(), "Stop");
       this.button(btns, "chevron-down", "Summary template", "nrt-more", (e) => this.showTemplateMenu(e));
-      this.button(btns, "x", "Discard recording", "nrt-discard", () => this.plugin.cancelRecording());
+      this.button(btns, "x", "Discard recording", "nrt-discard", () => void this.plugin.cancelRecording());
       this.draw();
       return;
     }
@@ -2470,7 +2475,7 @@ var RecordingBar = class {
     const job = this.plugin.jobs.find((j) => j.file.path === this.path);
     if (job && this.progressText) {
       this.progressText.setText(job.phase === "transcribing" ? `${job.message} ${job.progress}%` : job.message);
-      if (this.progressFill) this.progressFill.style.width = `${job.phase === "transcribing" ? job.progress : 100}%`;
+      if (this.progressFill && job.phase === "transcribing") this.progressFill.setCssProps({ width: `${job.progress}%` });
     }
   }
   pushLevel(mic, sys) {
@@ -2478,8 +2483,8 @@ var RecordingBar = class {
     this.history.copyWithin(0, 1);
     this.history[WAVE_BARS - 1] = Math.min(1, level);
     const curve = (v) => `${Math.round(Math.min(1, Math.pow(Math.max(0, v), 0.5)) * 100)}%`;
-    if (this.micFill) this.micFill.style.width = curve(mic);
-    if (this.sysFill) this.sysFill.style.width = curve(sys);
+    if (this.micFill) this.micFill.setCssProps({ width: curve(mic) });
+    if (this.sysFill) this.sysFill.setCssProps({ width: curve(sys) });
     if (!this.drawPending) {
       this.drawPending = true;
       window.requestAnimationFrame(() => {
@@ -2697,11 +2702,13 @@ var SetupModal = class extends import_obsidian6.Modal {
         placeholder: current ? void 0 : "Choose a model\u2026",
         options: models.map((m) => ({ value: m.name, label: modelLabel(m) })),
         value: current != null ? current : "",
-        onChange: async (v) => {
-          s.ollamaModel = v;
-          await this.plugin.saveSettings();
-          this.rows.ollama = await this.ollamaRow();
-          this.draw();
+        onChange: (v) => {
+          void (async () => {
+            s.ollamaModel = v;
+            await this.plugin.saveSettings();
+            this.rows.ollama = await this.ollamaRow();
+            this.draw();
+          })();
         }
       },
       actions: downloads
@@ -2789,10 +2796,10 @@ var SetupModal = class extends import_obsidian6.Modal {
     }
   }
   draw() {
-    var _a, _b;
+    var _a;
     const scroller = this.contentEl;
     const top = scroller.scrollTop;
-    this.listEl.style.minHeight = `${this.listEl.offsetHeight}px`;
+    this.listEl.setCssProps({ "min-height": `${this.listEl.offsetHeight}px` });
     this.listEl.empty();
     for (const row of Object.values(this.rows)) {
       const r = this.listEl.createDiv({ cls: `nrt-setup-row is-${row.status}` });
@@ -2821,15 +2828,16 @@ var SetupModal = class extends import_obsidian6.Modal {
       }
       if (row.status === "working") {
         const track = body.createDiv({ cls: "nrt-track" + (row.progress == null ? " nrt-indeterminate" : "") });
-        track.createDiv({ cls: "nrt-fill" }).style.width = `${Math.round(((_a = row.progress) != null ? _a : 1) * 100)}%`;
+        const fill = track.createDiv({ cls: "nrt-fill" });
+        if (row.progress != null) fill.setCssProps({ width: `${Math.round(row.progress * 100)}%` });
       }
       if (row.log) body.createDiv({ cls: "nrt-setup-log", text: row.log });
-      if ((_b = row.actions) == null ? void 0 : _b.length) {
+      if ((_a = row.actions) == null ? void 0 : _a.length) {
         const a = r.createDiv({ cls: "nrt-setup-actions" });
         row.actions.forEach((act) => a.createEl("button", { text: act.label, cls: act.cta ? "mod-cta" : "" }).addEventListener("click", act.run));
       }
     }
-    this.listEl.style.minHeight = "";
+    this.listEl.setCssProps({ "min-height": "" });
     scroller.scrollTop = top;
   }
   onClose() {
