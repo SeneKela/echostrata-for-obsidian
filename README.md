@@ -62,7 +62,8 @@ The transcript is folded by default so the summary stays on top.
 | | |
 |---|---|
 | **One-click recording** | A mic button in the note header turns into a red **■ 03:12** timer while recording. The ribbon icon, a command and the status bar also start and stop recording. |
-| **Floating recording bar** | Live waveform, separate Mic and System level meters (click to mute/unmute mid-recording), plus **Pause**, **Stop** and **Discard** buttons. After you stop, it shows transcription progress. |
+| **Floating recording bar** | Live waveform, separate Mic and System level meters, plus **Pause**, **Stop** and **Discard** buttons. After you stop, it shows transcription progress. |
+| **Per-track mute** | Click the mic or speaker icon on the recording bar to instantly mute or unmute that track mid-recording. The icon turns red, the level meter fades, and the waveform contribution drops to zero — without stopping the recording. Also available as two Command Palette commands so you can assign hotkeys. |
 | **Live note updates** | A "Recording…" placeholder appears where your cursor is. It becomes "Transcribing…", then the final result. |
 | **Built-in system audio** | Uses Apple's ScreenCaptureKit. No virtual audio driver, no Multi-Output Device, and your volume keys keep working. |
 | **Speaker labels** | Me / Others, with names you can change. Silent channels are skipped automatically. |
