@@ -52,7 +52,7 @@ export function applyTemplateToFile(plugin: NoteRecorderPlugin, file: TFile, tem
 		const md = await plugin.app.vault.read(file);
 		const blocks = await buildSummary(plugin, md, file.basename, isoDate(new Date(file.stat.ctime)), template);
 		await plugin.app.vault.process(file, (data) => replaceSummary(data, blocks));
-		await plugin.app.fileManager.processFrontMatter(file, (fm) => {
+		await plugin.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 			fm["echostrata-template"] = template.id;
 		});
 	}, template);

@@ -130,7 +130,18 @@ export class RecorderSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	// Obsidian 1.13.0+ declarative settings API. Returning [] keeps the imperative
+	// display() path active while satisfying the interface so settings search works.
+	getSettingDefinitions(): [] {
+		return [];
+	}
+
 	display(): void {
+		void this.render();
+	}
+
+	/** Re-renders the settings panel. Use instead of calling the deprecated public display() directly. */
+	private refresh(): void {
 		void this.render();
 	}
 
@@ -338,7 +349,7 @@ export class RecorderSettingTab extends PluginSettingTab {
 				new TemplateEditModal(this.app, null, s.customTemplates.map((c) => c.id), async (def) => {
 					s.customTemplates.push(def);
 					await this.saveTemplates();
-					this.display();
+					this.refresh();
 				}).open();
 			}));
 		customHeader.settingEl.addClass("nrt-tpl-header");
@@ -351,7 +362,7 @@ export class RecorderSettingTab extends PluginSettingTab {
 					new TemplateEditModal(this.app, def, [], async (updated) => {
 						Object.assign(def, updated, { id: def.id });
 						await this.saveTemplates();
-						this.display();
+						this.refresh();
 					}).open();
 				}))
 				.addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(() => {
@@ -359,7 +370,7 @@ export class RecorderSettingTab extends PluginSettingTab {
 						s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
 						if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
 						await this.saveTemplates();
-						this.display();
+						this.refresh();
 					})();
 				}));
 		}
@@ -418,7 +429,7 @@ export class RecorderSettingTab extends PluginSettingTab {
 					models.forEach((m) => d.addOption(m.name, modelLabel(m)));
 					d.setValue(current ?? s.ollamaModel).onChange((v) => {
 						s.ollamaModel = v;
-						void save().then(() => this.renderOllamaModel());
+						void save().then(() => void this.renderOllamaModel());
 					});
 				});
 			if (current && current !== s.ollamaModel) {

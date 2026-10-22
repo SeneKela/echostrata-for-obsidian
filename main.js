@@ -260,7 +260,7 @@ var getModel = (id) => {
 };
 var NOISE_RE = /^[\s.]*([[(（【♪*].*[\])）】♪*])?[\s.]*$/;
 async function transcribeWav(bin, modelPath, wav, o) {
-  var _a, _b, _c, _d, _e, _f;
+  var _a, _b, _c, _d;
   const outBase = wav.replace(/\.wav$/, "");
   const threads = o.threads > 0 ? o.threads : Math.max(2, Math.min(8, os2.cpus().length - 2));
   const args = ["-m", modelPath, "-f", wav, "-l", o.language || "auto", "-t", String(threads), "-oj", "-of", outBase, "-pp"];
@@ -288,7 +288,9 @@ async function transcribeWav(bin, modelPath, wav, o) {
     const text = String((_b = s.text) != null ? _b : "").trim();
     if (!text || NOISE_RE.test(text) || text === prev) continue;
     prev = text;
-    segments.push({ start: (_d = (_c = s.offsets) == null ? void 0 : _c.from) != null ? _d : 0, end: (_f = (_e = s.offsets) == null ? void 0 : _e.to) != null ? _f : 0, text });
+    const from = typeof ((_c = s.offsets) == null ? void 0 : _c.from) === "number" ? s.offsets.from : 0;
+    const to = typeof ((_d = s.offsets) == null ? void 0 : _d.to) === "number" ? s.offsets.to : 0;
+    segments.push({ start: from, end: to, text });
   }
   return segments;
 }
@@ -1152,6 +1154,7 @@ var NativeSystemAudio = class {
   }
   start(timeoutMs = 1e4) {
     return new Promise((resolve, reject) => {
+      var _a, _b;
       let settled = false;
       const done = (err) => {
         if (settled) return;
@@ -1169,7 +1172,7 @@ var NativeSystemAudio = class {
       const proc = (0, import_child_process2.spawn)(this.bin, [], { env: shellEnv(), stdio: ["pipe", "pipe", "pipe"] });
       this.proc = proc;
       let errBuf = "";
-      proc.stderr.on("data", (b) => {
+      (_a = proc.stderr) == null ? void 0 : _a.on("data", (b) => {
         errBuf += b.toString();
         let i;
         while ((i = errBuf.indexOf("\n")) >= 0) {
@@ -1187,7 +1190,7 @@ var NativeSystemAudio = class {
           } else if (line2) console.debug("[note-recorder helper]", line2);
         }
       });
-      proc.stdout.on("data", (b) => this.handle(b));
+      (_b = proc.stdout) == null ? void 0 : _b.on("data", (b) => this.handle(b));
       proc.on("error", (e) => done(e));
       proc.on("exit", (code) => {
         this.proc = null;
@@ -1320,7 +1323,16 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
     this.plugin = plugin;
     this.ollamaEl = null;
   }
+  // Obsidian 1.13.0+ declarative settings API. Returning [] keeps the imperative
+  // display() path active while satisfying the interface so settings search works.
+  getSettingDefinitions() {
+    return [];
+  }
   display() {
+    void this.render();
+  }
+  /** Re-renders the settings panel. Use instead of calling the deprecated public display() directly. */
+  refresh() {
     void this.render();
   }
   async render() {
@@ -1454,7 +1466,7 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
       new TemplateEditModal(this.app, null, s.customTemplates.map((c) => c.id), async (def) => {
         s.customTemplates.push(def);
         await this.saveTemplates();
-        this.display();
+        this.refresh();
       }).open();
     }));
     customHeader.settingEl.addClass("nrt-tpl-header");
@@ -1463,14 +1475,14 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
         new TemplateEditModal(this.app, def, [], async (updated) => {
           Object.assign(def, updated, { id: def.id });
           await this.saveTemplates();
-          this.display();
+          this.refresh();
         }).open();
       })).addExtraButton((b) => b.setIcon("trash").setTooltip("Delete").onClick(() => {
         void (async () => {
           s.customTemplates = s.customTemplates.filter((c) => c.id !== def.id);
           if (s.summaryTemplate === def.id) s.summaryTemplate = DEFAULT_SETTINGS.summaryTemplate;
           await this.saveTemplates();
-          this.display();
+          this.refresh();
         })();
       }));
     }
@@ -1512,7 +1524,7 @@ var RecorderSettingTab = class extends import_obsidian3.PluginSettingTab {
         models.forEach((m) => d.addOption(m.name, modelLabel(m)));
         d.setValue(current != null ? current : s.ollamaModel).onChange((v) => {
           s.ollamaModel = v;
-          void save().then(() => this.renderOllamaModel());
+          void save().then(() => void this.renderOllamaModel());
         });
       });
       if (current && current !== s.ollamaModel) {
@@ -2001,9 +2013,10 @@ var RecordingSession = class {
   }
   /** Template that will be used: explicit choice, else the note's `echostrata-template`, else the setting. */
   get activeTemplate() {
-    var _a, _b, _c, _d;
-    const fm = (_b = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b["echostrata-template"];
-    return getTemplate((_d = (_c = this.templateId) != null ? _c : fm) != null ? _d : this.plugin.settings.summaryTemplate);
+    var _a, _b, _c;
+    const fm = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter;
+    const tmplId = typeof (fm == null ? void 0 : fm["echostrata-template"]) === "string" ? fm["echostrata-template"] : void 0;
+    return getTemplate((_c = (_b = this.templateId) != null ? _b : tmplId) != null ? _c : this.plugin.settings.summaryTemplate);
   }
   get elapsedMs() {
     var _a, _b;
@@ -2117,9 +2130,10 @@ var ProcessingJob = class {
   }
   /** Template chosen for this recording, else the note's `echostrata-template` frontmatter, else the setting. */
   resolveTemplate() {
-    var _a, _b, _c, _d;
-    const fm = (_b = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter) == null ? void 0 : _b["echostrata-template"];
-    return getTemplate((_d = (_c = this.templateId) != null ? _c : fm) != null ? _d : this.plugin.settings.summaryTemplate);
+    var _a, _b, _c;
+    const fm = (_a = this.plugin.app.metadataCache.getFileCache(this.file)) == null ? void 0 : _a.frontmatter;
+    const tmplId = typeof (fm == null ? void 0 : fm["echostrata-template"]) === "string" ? fm["echostrata-template"] : void 0;
+    return getTemplate((_c = (_b = this.templateId) != null ? _b : tmplId) != null ? _c : this.plugin.settings.summaryTemplate);
   }
   set(phase, message, progress = this.progress) {
     this.phase = phase;
@@ -2799,7 +2813,7 @@ var SetupModal = class extends import_obsidian6.Modal {
     var _a;
     const scroller = this.contentEl;
     const top = scroller.scrollTop;
-    this.listEl.setCssProps({ "min-height": `${this.listEl.offsetHeight}px` });
+    this.listEl.setCssStyles({ minHeight: `${this.listEl.offsetHeight}px` });
     this.listEl.empty();
     for (const row of Object.values(this.rows)) {
       const r = this.listEl.createDiv({ cls: `nrt-setup-row is-${row.status}` });
@@ -2837,7 +2851,7 @@ var SetupModal = class extends import_obsidian6.Modal {
         row.actions.forEach((act) => a.createEl("button", { text: act.label, cls: act.cta ? "mod-cta" : "" }).addEventListener("click", act.run));
       }
     }
-    this.listEl.setCssProps({ "min-height": "" });
+    this.listEl.setCssStyles({ minHeight: "" });
     scroller.scrollTop = top;
   }
   onClose() {
@@ -3114,7 +3128,8 @@ var NoteRecorderPlugin = class extends import_obsidian8.Plugin {
   /* ---------------- settings ---------------- */
   async loadSettings() {
     var _a, _b;
-    const data = (_a = await this.loadData()) != null ? _a : {};
+    const raw = (_a = await this.loadData()) != null ? _a : {};
+    const data = raw;
     this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
     setCustomTemplates(this.settings.customTemplates);
     if (((_b = data.settingsVersion) != null ? _b : 1) < 2) {

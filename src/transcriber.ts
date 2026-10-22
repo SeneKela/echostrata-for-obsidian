@@ -57,14 +57,18 @@ export async function transcribeWav(bin: string, modelPath: string, wav: string,
 	if (code !== 0 || !fs.existsSync(jsonPath)) {
 		throw new Error(`whisper.cpp failed (exit ${code}): ${tail.slice(-3).join(" | ")}`);
 	}
-	const data = JSON.parse(fs.readFileSync(jsonPath, "utf8"));
+	interface WhisperSegment { text?: unknown; offsets?: { from?: unknown; to?: unknown } }
+	interface WhisperOutput { transcription?: WhisperSegment[] }
+	const data = JSON.parse(fs.readFileSync(jsonPath, "utf8")) as WhisperOutput;
 	const segments: Segment[] = [];
 	let prev = "";
 	for (const s of data.transcription ?? []) {
 		const text = String(s.text ?? "").trim();
 		if (!text || NOISE_RE.test(text) || text === prev) continue; // drop [BLANK_AUDIO], (music), repeats
 		prev = text;
-		segments.push({ start: s.offsets?.from ?? 0, end: s.offsets?.to ?? 0, text });
+		const from = typeof s.offsets?.from === "number" ? s.offsets.from : 0;
+		const to = typeof s.offsets?.to === "number" ? s.offsets.to : 0;
+		segments.push({ start: from, end: to, text });
 	}
 	return segments;
 }

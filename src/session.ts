@@ -48,8 +48,9 @@ export class RecordingSession {
 
 	/** Template that will be used: explicit choice, else the note's `echostrata-template`, else the setting. */
 	get activeTemplate(): SummaryTemplate {
-		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter?.["echostrata-template"];
-		return getTemplate(this.templateId ?? fm ?? this.plugin.settings.summaryTemplate);
+		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter;
+		const tmplId = typeof fm?.["echostrata-template"] === "string" ? (fm["echostrata-template"] as string) : undefined;
+		return getTemplate(this.templateId ?? tmplId ?? this.plugin.settings.summaryTemplate);
 	}
 
 	get elapsedMs(): number {
@@ -170,8 +171,9 @@ export class ProcessingJob {
 
 	/** Template chosen for this recording, else the note's `echostrata-template` frontmatter, else the setting. */
 	private resolveTemplate(): SummaryTemplate {
-		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter?.["echostrata-template"];
-		return getTemplate(this.templateId ?? fm ?? this.plugin.settings.summaryTemplate);
+		const fm = this.plugin.app.metadataCache.getFileCache(this.file)?.frontmatter;
+		const tmplId = typeof fm?.["echostrata-template"] === "string" ? (fm["echostrata-template"] as string) : undefined;
+		return getTemplate(this.templateId ?? tmplId ?? this.plugin.settings.summaryTemplate);
 	}
 
 	private set(phase: JobPhase, message: string, progress = this.progress): void {

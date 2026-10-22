@@ -274,7 +274,7 @@ export class AudioRecorder {
 				channelInterpretation: "discrete",
 				processorOptions: { targetRate: TARGET_RATE },
 			});
-			node.port.onmessage = (e: MessageEvent) =>
+			node.port.onmessage = (e: MessageEvent<{ mic: Float32Array; sys: Float32Array; micPeak: number; sysPeak: number }>) =>
 				this.handleChunk(e.data.mic, e.data.sys, e.data.micPeak, e.data.sysPeak);
 			return node;
 		}

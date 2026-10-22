@@ -269,7 +269,7 @@ export class NativeSystemAudio {
 			const proc = spawn(this.bin, [], { env: shellEnv(), stdio: ["pipe", "pipe", "pipe"] });
 			this.proc = proc;
 			let errBuf = "";
-			proc.stderr!.on("data", (b: Buffer) => {
+			proc.stderr?.on("data", (b: Buffer) => {
 				errBuf += b.toString();
 				let i: number;
 				while ((i = errBuf.indexOf("\n")) >= 0) {
@@ -287,7 +287,7 @@ export class NativeSystemAudio {
 					} else if (line) console.debug("[note-recorder helper]", line);
 				}
 			});
-			proc.stdout!.on("data", (b: Buffer) => this.handle(b));
+			proc.stdout?.on("data", (b: Buffer) => this.handle(b));
 			proc.on("error", (e) => done(e));
 			proc.on("exit", (code) => {
 				this.proc = null;

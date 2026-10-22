@@ -307,7 +307,7 @@ export class SetupModal extends Modal {
 		// The content area scrolls; keep its position and height stable while the list is rebuilt.
 		const scroller = this.contentEl;
 		const top = scroller.scrollTop;
-		this.listEl.setCssProps({ "min-height": `${this.listEl.offsetHeight}px` });
+		this.listEl.setCssStyles({ minHeight: `${this.listEl.offsetHeight}px` });
 		this.listEl.empty();
 		for (const row of Object.values(this.rows)) {
 			const r = this.listEl.createDiv({ cls: `nrt-setup-row is-${row.status}` });
@@ -348,7 +348,7 @@ export class SetupModal extends Modal {
 					a.createEl("button", { text: act.label, cls: act.cta ? "mod-cta" : "" }).addEventListener("click", act.run));
 			}
 		}
-		this.listEl.setCssProps({ "min-height": "" });
+		this.listEl.setCssStyles({ minHeight: "" });
 		scroller.scrollTop = top;
 	}
 

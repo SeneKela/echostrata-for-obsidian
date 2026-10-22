@@ -201,11 +201,11 @@ Echostrata is built so that **everything that should stay private, stays private
 
 **The only network traffic is the one-time setup downloads you trigger yourself:**
 
-- whisper.cpp, from Homebrew;
-- the speech model, from Hugging Face (`ggerganov/whisper.cpp`);
-- Ollama models, from the Ollama registry.
+- whisper.cpp, via Homebrew (`brew.sh`) — triggered when you click **Install** in the setup assistant;
+- the speech model, from Hugging Face (`huggingface.co`) — triggered when you click **Download** in the setup assistant;
+- Ollama models, from the Ollama registry (`ollama.com`) — triggered when you click **Download** in the setup assistant.
 
-After setup, Echostrata works fully offline.
+These requests go to `brew.sh` and `ollama.com`. No request is ever made without you explicitly clicking a setup button. After setup, Echostrata works fully offline.
 
 > If you point **Ollama URL** to a remote server, transcripts will be sent there for summarising. Keep the default `127.0.0.1` to stay fully local.
 
@@ -241,7 +241,17 @@ Programs are started directly with an argument list, never through a shell strin
 
 ### Network
 
-Only the one-time downloads listed under [Privacy](#privacy), plus requests to the **Ollama URL** you configure (default `127.0.0.1`).
+External domains contacted by Echostrata:
+
+| Domain | When | What |
+|---|---|---|
+| `brew.sh` | You click **Install** in the setup assistant | Downloads whisper-cpp via Homebrew |
+| `ollama.com` | You click **Download** for a model in the setup assistant | Downloads an Ollama model |
+| `huggingface.co` | You click **Download** for a speech model in the setup assistant | Downloads a Whisper model file |
+
+All three are user-initiated one-time actions. No request happens automatically or in the background.
+
+Runtime: the plugin makes HTTP requests to the **Ollama URL** you configure (default `127.0.0.1` — local only) to list and query installed models. If you change the URL to a remote host, requests to that host will include your transcripts.
 
 ### Release integrity
 

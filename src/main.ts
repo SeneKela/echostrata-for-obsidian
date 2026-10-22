@@ -191,7 +191,8 @@ export default class NoteRecorderPlugin extends Plugin {
 	/* ---------------- settings ---------------- */
 
 	async loadSettings(): Promise<void> {
-		const data = (await this.loadData()) ?? {};
+		const raw: unknown = (await this.loadData()) ?? {};
+		const data = raw as Partial<RecorderSettings> & { settingsVersion?: number };
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
 		setCustomTemplates(this.settings.customTemplates);
 		// v2: built-in macOS capture replaces BlackHole auto-detect as the default system source.
